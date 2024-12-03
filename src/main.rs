@@ -1,18 +1,16 @@
-use raylib::prelude::*;
 use crate::player::*;
+use raylib::prelude::*;
 
 mod game;
-mod world_gen;
+mod physics;
 mod player;
+mod world_gen;
 
 const MAX_COLUMNS: usize = 20;
 
 fn main() {
     let mut player = Player::new(0.05, 0.1);
-    let (mut rl, thread) = raylib::init()
-        .size(640, 480)
-        .title("Hello, World")
-        .build();
+    let (mut rl, thread) = raylib::init().size(640, 480).title("Hello, World").build();
 
     rl.hide_cursor();
     rl.disable_cursor();
@@ -47,8 +45,7 @@ fn main() {
             if cursor_shown {
                 rl.hide_cursor();
                 rl.disable_cursor();
-            }
-            else {
+            } else {
                 rl.show_cursor();
             }
             cursor_shown = !cursor_shown;
@@ -63,33 +60,36 @@ fn main() {
         //----------------------------------------------------------------------------------
         let mut d = rl.begin_drawing(&thread);
 
-            d.clear_background(Color::RAYWHITE);
+        d.clear_background(Color::RAYWHITE);
 
-            {
-                let mut d = d.begin_mode3D(&player.camera);
-    
-                    d.draw_plane(rvec3(0.0, 0.0, 0.0), rvec2(32.0, 32.0), Color::LIGHTGRAY); // Draw ground
-                    d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::BLUE);     // Draw a blue wall
-                    d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::LIME);      // Draw a green wall
-                    d.draw_cube(rvec3(0.0, 2.5, 16.0), 32.0, 5.0, 1.0, Color::GOLD);      // Draw a yellow wall
-    
-                    // Draw some cubes around
-                    for i in 0..MAX_COLUMNS
-                    {
-                        d.draw_cube(positions[i], 2.0, heights[i], 2.0, colors[i]);
-                        d.draw_cube_wires(positions[i], 2.0, heights[i], 2.0, Color::MAROON);
-                    }
+        {
+            let mut d = d.begin_mode3D(&player.camera);
 
+            d.draw_plane(rvec3(0.0, 0.0, 0.0), rvec2(32.0, 32.0), Color::LIGHTGRAY); // Draw ground
+            d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::BLUE); // Draw a blue wall
+            d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::LIME); // Draw a green wall
+            d.draw_cube(rvec3(0.0, 2.5, 16.0), 32.0, 5.0, 1.0, Color::GOLD); // Draw a yellow wall
+
+            // Draw some cubes around
+            for i in 0..MAX_COLUMNS {
+                d.draw_cube(positions[i], 2.0, heights[i], 2.0, colors[i]);
+                d.draw_cube_wires(positions[i], 2.0, heights[i], 2.0, Color::MAROON);
             }
+        }
 
+        d.draw_rectangle(10, 10, 220, 70, Color::SKYBLUE.fade(0.5));
+        d.draw_rectangle_lines(10, 10, 220, 70, Color::BLUE);
 
-            d.draw_rectangle( 10, 10, 220, 70, Color::SKYBLUE.fade(0.5));
-            d.draw_rectangle_lines( 10, 10, 220, 70, Color::BLUE);
-
-            d.draw_text("First person camera default controls:", 20, 20, 10, Color::BLACK);
-            d.draw_text("- Move with keys: W, A, S, D", 40, 40, 10, Color::DARKGRAY);
-            d.draw_text("- Mouse move to look around", 40, 60, 10, Color::DARKGRAY);
+        d.draw_text(
+            "First person camera default controls:",
+            20,
+            20,
+            10,
+            Color::BLACK,
+        );
+        d.draw_text("- Move with keys: W, A, S, D", 40, 40, 10, Color::DARKGRAY);
+        d.draw_text("- Mouse move to look around", 40, 60, 10, Color::DARKGRAY);
 
         //----------------------------------------------------------------------------------   while !rl.window_should_close() {
-   }
+    }
 }
