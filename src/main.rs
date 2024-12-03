@@ -1,13 +1,21 @@
 use raylib::prelude::*;
+use crate::player::*;
+
+mod game;
+mod world_gen;
+mod player;
 
 const MAX_COLUMNS: usize = 20;
 
 fn main() {
-    let mut camera: Camera3D = Camera3D::perspective(Vector3::new(0.0, 0.0, 0.0), Vector3::new(1.0, 1.0, 1.0), Vector3::new(0.0, 1.0, 0.0), 60.0);
+    let mut player = Player::new(0.05, 0.1);
     let (mut rl, thread) = raylib::init()
         .size(640, 480)
         .title("Hello, World")
         .build();
+
+    rl.hide_cursor();
+    rl.disable_cursor();
 
     // Generates some random columns
     let mut heights = [0.032; MAX_COLUMNS];
@@ -28,10 +36,27 @@ fn main() {
             255,
         );
     }
+
+    let mut cursor_shown = false;
+
     while !rl.window_should_close() {
-            // Update
+        if rl.is_key_pressed(KeyboardKey::KEY_ENTER) {
+            rl.toggle_fullscreen();
+        }
+        if rl.is_key_pressed(KeyboardKey::KEY_TAB) {
+            if cursor_shown {
+                rl.hide_cursor();
+                rl.disable_cursor();
+            }
+            else {
+                rl.show_cursor();
+            }
+            cursor_shown = !cursor_shown;
+        }
+
+        // Update
         //----------------------------------------------------------------------------------
-        rl.update_camera(&mut camera, CameraMode::CAMERA_FIRST_PERSON);                  // Update camera
+        player.update(&rl);
         //----------------------------------------------------------------------------------
 
         // Draw
@@ -41,7 +66,7 @@ fn main() {
             d.clear_background(Color::RAYWHITE);
 
             {
-                let mut d = d.begin_mode3D(&camera);
+                let mut d = d.begin_mode3D(&player.camera);
     
                     d.draw_plane(rvec3(0.0, 0.0, 0.0), rvec2(32.0, 32.0), Color::LIGHTGRAY); // Draw ground
                     d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::BLUE);     // Draw a blue wall
