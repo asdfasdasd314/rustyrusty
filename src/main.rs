@@ -1,15 +1,18 @@
+use crate::physics::*;
 use crate::player::*;
 use raylib::prelude::*;
 
 mod game;
+mod math_util;
 mod physics;
 mod player;
-mod math_util;
 mod world_gen;
 
 const MAX_COLUMNS: usize = 20;
 
 fn main() {
+    let shape = RectangularPrism::new(Vector3(10.0, 0.0, 0.0), 10.0, 10.0, 10.0);
+    let rigid_body = PhysicsBody::new(RectangularPrism);
     let mut player = Player::new(0.01, 0.1);
     let (mut rl, thread) = raylib::init().size(640, 480).title("Hello, World").build();
 

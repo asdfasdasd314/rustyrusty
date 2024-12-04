@@ -1,3 +1,4 @@
+use crate::physics::*;
 use raylib::prelude::*;
 
 pub struct Player {
@@ -6,10 +7,12 @@ pub struct Player {
     pub movement_speed: f32,
     pub pitch: f32,
     pub yaw: f32,
+
+    pub rigid_body: PhysicsBody,
 }
 
 impl Player {
-    pub fn new(movement_speed: f32, camera_sensitivity: f32) -> Self {
+    pub fn new(movement_speed: f32, camera_sensitivity: f32, rigid_body: PhysicsBody) -> Self {
         Player {
             camera: Camera3D::perspective(
                 Vector3::new(0.0, 0.0, 0.0),
@@ -21,6 +24,7 @@ impl Player {
             camera_sensitivity,
             pitch: 0.0,
             yaw: 89.0,
+            rigid_body,
         }
     }
 

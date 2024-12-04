@@ -45,6 +45,17 @@ pub struct RectangularPrism {
     pub height: f32,
 }
 
+impl RectangularPrism {
+    pub fn new(root: Vector3, length: f32, width: f32, height: f32) -> Self {
+        RectangularPrism {
+            root,
+            length,
+            width,
+            height,
+        }
+    }
+}
+
 impl MeshShape for RectangularPrism {
     fn get_vertices(&self) -> Vec<Vector3> {
         vec![
@@ -90,25 +101,21 @@ impl MeshShape for RectangularPrism {
     }
 }
 
-pub struct PhysicsBody<'a> {
+pub struct PhysicsBody {
     // Both of these positions are measured from the root of the object (whatever that means)
     // The previous position is necessary for determining collisions
-    pub previous_position: Vector3,
-    pub current_position: Vector3,
+    pub position: Vector3,
+    pub velocity: Vector3,
 
-    pub simple_shape: &'a dyn MeshShape,
+    pub mesh: Box<dyn MeshShape>,
 }
 
-impl<'a> PhysicsBody<'a> {
-    pub fn new(
-        previous_position: Vector3,
-        current_position: Vector3,
-        simple_shape: &'a dyn MeshShape,
-    ) -> Self {
+impl PhysicsBody {
+    pub fn new(mesh: Box<dyn MeshShape>) -> Self {
         PhysicsBody {
-            previous_position,
-            current_position,
-            simple_shape,
+            position: Vector3::new(0.0, 0.0, 0.0),
+            velocity: Vector3::new(0.0, 0.0, 0.0),
+            mesh,
         }
     }
 }
