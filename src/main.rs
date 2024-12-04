@@ -4,12 +4,13 @@ use raylib::prelude::*;
 mod game;
 mod physics;
 mod player;
+mod math_util;
 mod world_gen;
 
 const MAX_COLUMNS: usize = 20;
 
 fn main() {
-    let mut player = Player::new(0.05, 0.1);
+    let mut player = Player::new(0.01, 0.1);
     let (mut rl, thread) = raylib::init().size(640, 480).title("Hello, World").build();
 
     rl.hide_cursor();
