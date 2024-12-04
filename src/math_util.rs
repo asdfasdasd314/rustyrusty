@@ -19,6 +19,13 @@ pub const fn cross_product(v1: Vector3, v2: Vector3) -> Vector3 {
     return Vector3::new(x_component, y_component, z_component);
 }
 
+// Theta sweeps across the x-z plane starting at the positive x-axis and goes up to the positive y-axis
+// Phi comes down from the positive y-axis
+pub struct SphericalAngle {
+    pub theta: f32,
+    pub phi: f32,
+}
+
 pub struct Plane {
     // These are the variables necessary to define a plane in 3 space
     // ax + by + cz = d
@@ -99,7 +106,10 @@ pub fn check_planes_intersect(plane1: &Plane, plane2: &Plane) -> bool {
 }
 
 // This function assumes it has been checked that the planes intersect
-pub fn calculate_line_intersection_between_planes(plane1: &Plane, plane2: &Plane) -> PlaneIntersection {
+pub fn calculate_line_intersection_between_planes(
+    plane1: &Plane,
+    plane2: &Plane,
+) -> PlaneIntersection {
     if !check_planes_intersect(plane1, plane2) {
         panic!("The planes passed tot calculate_line_intersection_between_planes should intersect at some point, and this should be checked");
     }
@@ -120,20 +130,20 @@ pub fn calculate_line_intersection_between_planes(plane1: &Plane, plane2: &Plane
 
     let line_intersection =
         find_intersection_of_lines_2d(plane1.a, plane1.b, plane1.d, plane2.a, plane2.b, plane2.d);
-    
+
     match line_intersection {
         LineIntersection::Point(point) => {
-            // This is the base case where we have an actual point
+            // This is the most basic case where we have an actual point
             // Remember z0 = 0
             let p0 = Vector3::new(point.x, point.y, 0.0);
             return PlaneIntersection::Line(Line3D::from_point_and_parallel_vec(p0, parallel));
-        } 
+        }
         LineIntersection::VerticalLine(vertical_line) => {
             return PlaneIntersection::VerticalLine(VerticalLine3D::new(vertical_line.x0, 0.0));
-        } 
+        }
         LineIntersection::Infinite => {
             return PlaneIntersection::Infinite;
-        } 
+        }
     }
 }
 
@@ -162,4 +172,30 @@ fn find_intersection_of_lines_2d(
     let x0 = (d0 - b0 * y0) / a0;
 
     return LineIntersection::Point(Vector2::new(x0, y0));
+}
+
+// Calculates the difference in between the angles of the vectors using the base_vec as the base
+// **in degrees**
+pub fn calculate_difference_in_angle(
+    base_vec: &Vector3,
+    compare_to_vec: &Vector3,
+) -> SphericalAngle {
+    // To make things easier, we'll transform these vectors so that base_vec is on the z-axis
+    // We can do this by calculating the angle the base_vec makes with the origin
+    // We know x, y, and z, so we can use conversions between ro, theta, and phi to find these changes in angle
+    let base_vec_magnitude = (base_vec.x.powi(2) + base_vec.y.powi(2) + base_vec.z.powi(2)).sqrt();
+    let compare_to_vec_magnitude =
+        (compare_to_vec.x.powi(2) + compare_to_vec.y.powi(2) + compare_to_vec.z.powi(2)).sqrt();
+
+    let base_vec_theta = (base_vec.y / (base_vec.x.powi(2) + base_vec.y.powi(2)).sqrt()).asin();
+    let base_vec_phi = base_vec.z / base_vec_magnitude;
+
+    let compare_to_vec_theta =
+        (compare_to_vec.y / (compare_to_vec.x.powi(2) + compare_to_vec.y.powi(2)).sqrt()).asin();
+    let compare_to_vec_phi = compare_to_vec.z / compare_to_vec_magnitude;
+
+    return SphericalAngle {
+        theta: compare_to_vec_theta - base_vec_theta,
+        phi: compare_to_vec_phi - base_vec_phi,
+    };
 }
