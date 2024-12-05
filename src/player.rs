@@ -8,11 +8,11 @@ pub struct Player {
     pub pitch: f32,
     pub yaw: f32,
 
-    pub rigid_body: PhysicsBody,
+    pub rigid_body: SolidBody,
 }
 
 impl Player {
-    pub fn new(movement_speed: f32, camera_sensitivity: f32, rigid_body: PhysicsBody) -> Self {
+    pub fn new(movement_speed: f32, camera_sensitivity: f32, rigid_body: SolidBody) -> Self {
         Player {
             camera: Camera3D::perspective(
                 Vector3::new(0.0, 0.0, 0.0),

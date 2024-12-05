@@ -11,10 +11,10 @@ mod world_gen;
 const MAX_COLUMNS: usize = 20;
 
 fn main() {
-    let shape = RectangularPrism::new(Vector3(10.0, 0.0, 0.0), 10.0, 10.0, 10.0);
-    let rigid_body = PhysicsBody::new(RectangularPrism);
-    let mut player = Player::new(0.01, 0.1);
-    let (mut rl, thread) = raylib::init().size(640, 480).title("Hello, World").build();
+    let shape = RectangularPrism::new(Vector3::new(10.0, 0.0, 0.0), 10.0, 10.0, 10.0);
+    let rigid_body = PhysicsBody::new(Box::new(shape));
+    let mut player = Player::new(0.01, 0.1, rigid_body);
+    let (mut rl, thread) = raylib::init().size(640, 480).title("Physics!!!").build();
 
     rl.hide_cursor();
     rl.disable_cursor();
@@ -67,7 +67,7 @@ fn main() {
         d.clear_background(Color::RAYWHITE);
 
         {
-            let mut d = d.begin_mode3D(&player.camera);
+            let mut d = d.begin_mode3D(player.camera);
 
             d.draw_plane(rvec3(0.0, 0.0, 0.0), rvec2(32.0, 32.0), Color::LIGHTGRAY); // Draw ground
             d.draw_cube(rvec3(16.0, 2.5, 0.0), 1.0, 5.0, 32.0, Color::BLUE); // Draw a blue wall

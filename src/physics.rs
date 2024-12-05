@@ -34,6 +34,7 @@ impl Polygon {
 pub trait MeshShape {
     fn get_vertices(&self) -> Vec<Vector3>;
     fn get_polygons(&self) -> Vec<Polygon>;
+    fn render(&self, draw_handle: RaylibDrawHandle);
 }
 
 pub struct RectangularPrism {
@@ -99,9 +100,15 @@ impl MeshShape for RectangularPrism {
             Polygon::new(vec![vertices[1], vertices[3], vertices[5], vertices[7]]),
         ]
     }
+
+    fn render(&self, draw_handle: RaylibDrawHandle) {
+        for polygon in self.get_polygons() {
+            // TODO for tomorrow: get these shapes rendering, I want to be able to render by polygons because there is a ton of room to optimize if this path is taken
+        }
+    }
 }
 
-pub struct PhysicsBody {
+pub struct SolidBody {
     // Both of these positions are measured from the root of the object (whatever that means)
     // The previous position is necessary for determining collisions
     pub position: Vector3,
@@ -110,9 +117,9 @@ pub struct PhysicsBody {
     pub mesh: Box<dyn MeshShape>,
 }
 
-impl PhysicsBody {
+impl SolidBody {
     pub fn new(mesh: Box<dyn MeshShape>) -> Self {
-        PhysicsBody {
+        SolidBody {
             position: Vector3::new(0.0, 0.0, 0.0),
             velocity: Vector3::new(0.0, 0.0, 0.0),
             mesh,
@@ -142,7 +149,7 @@ fn check_polygons_collide(polygon1: &Polygon, polygon2: &Polygon) -> bool {
 
             return check_angles_surround_relative_origin(bounding_angles);
         }
-        PlaneIntersection::VerticalLine(vertical_line) => {
+        PlaneIntersection::VerticalLine(_) => {
             // In this case we already have a relative origin, so just create a vector that points straight up and pass to the calculate relative angles function
 
             // Create the up vector
@@ -164,23 +171,11 @@ fn check_angles_surround_relative_origin(angles: Vec<SphericalAngle>) -> bool {
     for i in 0..(angles.len() - 1) {
         for j in (i + 1)..angles.len() {
             // We want to check if the sign flips across the pair in both the theta and phi
-            let angle1 = &angles[i]; // We're going to flip this one
+            let angle1 = &angles[i];
             let angle2 = &angles[j];
 
-            let adjusted_theta1 = angle1.theta * -1.0;
-            let adjusted_phi1 = angle1.phi * -1.0;
-
-            // Check if both thetas are greater than 0 or less than 0 together
-            let both_theta_greater_than_zero = adjusted_theta1 >= 0.0 && angle2.theta >= 0.0;
-            let both_theta_less_than_zero = adjusted_theta1 <= 0.0 && angle2.theta <= 0.0;
-            let both_phi_greater_than_zero = adjusted_phi1 >= 0.0 && angle2.phi >= 0.0;
-            let both_phi_less_than_zero = adjusted_phi1 <= 0.0 && angle2.phi <= 0.0;
-
-            if both_theta_greater_than_zero
-                || both_theta_less_than_zero
-                || both_phi_greater_than_zero
-                || both_phi_less_than_zero
-            {
+            // Sign should be flipped, so check for that (the product should be less than 0)
+            if angle1.theta * angle2.theta <= 0.0 && angle1.phi * angle2.phi <= 0.0 {
                 return true;
             }
         }
