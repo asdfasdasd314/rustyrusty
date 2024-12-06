@@ -34,7 +34,7 @@ impl Polygon {
 pub trait MeshShape {
     fn get_vertices(&self) -> Vec<Vector3>;
     fn get_polygons(&self) -> Vec<Polygon>;
-    fn render(&self, draw_handle: RaylibDrawHandle);
+    fn render(&self, draw_handle: &mut RaylibMode3D<'_, RaylibDrawHandle<'_>>);
 }
 
 pub struct RectangularPrism {
@@ -101,9 +101,15 @@ impl MeshShape for RectangularPrism {
         ]
     }
 
-    fn render(&self, draw_handle: RaylibDrawHandle) {
+    fn render(&self, draw_mode: &mut RaylibMode3D<'_, RaylibDrawHandle<'_>>) {
         for polygon in self.get_polygons() {
             // TODO for tomorrow: get these shapes rendering, I want to be able to render by polygons because there is a ton of room to optimize if this path is taken
+
+            // Each polygon is consructed of triangles, so we need to draw those
+            let points = polygon.points;
+            for i in 1..(points.len() - 1) {
+                draw_mode.draw_triangle3D(points[0], points[i], points[i + 1], Color::RED);
+            }
         }
     }
 }

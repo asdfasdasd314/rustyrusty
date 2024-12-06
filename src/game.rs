@@ -20,7 +20,7 @@ impl Game {
     // Handles all the setup for a game (window, player, world, etc.)
     pub fn new(player: Player, physical_objects: Vec<SolidBody>, window_size: (i32, i32), window_title: String) -> Game {
         let (rl, thread) = raylib::init().size(window_size.0, window_size.1).title(&window_title).build();
-        Game {
+        let mut game = Game {
             player,
             physical_objects,
             window_size,
@@ -29,12 +29,16 @@ impl Game {
             fullscreen: false,
             raylib_handle: rl,
             raylib_thread: thread,
-        }
+        };
+
+        game.raylib_handle.hide_cursor();
+        game.raylib_handle.disable_cursor();
+        return game;
     }
 
     // Perhaps this could change in the future, but the game loop loops forever and never returns
-    fn game_loop(&mut self) -> ! {
-        loop {
+    pub fn game_loop(&mut self) {
+        while !self.raylib_handle.window_should_close() {
             // When it comes to the game loop there are a few parts: process inputs, create outputs, render
 
             // Do things about fullscreen and exiting
@@ -61,18 +65,18 @@ impl Game {
 
             d.clear_background(Color::RAYWHITE);
 
-            // This scope is for the camera
+            // This covers everything that is rendered in three dimensions
             {
                 let mut d = d.begin_mode3D(self.player.camera);
 
-                for object in self.physical_objects {
-                    object.mesh.render(d);
+                for object in &self.physical_objects {
+                    object.mesh.render(&mut d);
                 }
             }
         }
     }
 
-    fn add_physical_object(&mut self, new_object: SolidBody) {
+    pub fn add_physical_object(&mut self, new_object: SolidBody) {
         self.physical_objects.push(new_object);
     }
 }
