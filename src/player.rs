@@ -1,19 +1,31 @@
-use crate::physics::*;
 use raylib::prelude::*;
 
+use crate::physics::*;
+
 pub struct Player {
+    // This is an absolute point
+    pub absolute_position: Vector3,
     pub camera: Camera3D,
     pub camera_sensitivity: f32,
     pub movement_speed: f32,
     pub pitch: f32,
     pub yaw: f32,
 
-    pub rigid_body: SolidBody,
+    pub rigid_body: RigidBody,
+}
+
+impl Dynamic for Player {
+    fn move_by(&mut self, change: Vector3) {
+        self.absolute_position += change;
+        self.camera.position += change;
+        self.rigid_body.move_by(change);
+    }
 }
 
 impl Player {
-    pub fn new(movement_speed: f32, camera_sensitivity: f32, rigid_body: SolidBody) -> Self {
+    pub fn new(init_position: Vector3, movement_speed: f32, camera_sensitivity: f32, rigid_body: RigidBody) -> Self {
         Player {
+            absolute_position: init_position,
             camera: Camera3D::perspective(
                 Vector3::new(0.0, 0.0, 0.0),
                 Vector3::new(1.0, 1.0, 1.0),
@@ -29,22 +41,32 @@ impl Player {
     }
 
     // This function should be called every frame to update the player position
-    pub fn update(&mut self, rl: &RaylibHandle) {
+    pub fn update(&mut self, rl: &RaylibHandle, delta_time: f32) {
         // Update camera position based on input
-        if rl.is_key_down(KeyboardKey::KEY_W) {
-            self.camera.position.z += self.yaw.to_radians().sin() * self.movement_speed;
-            self.camera.position.x += self.yaw.to_radians().cos() * self.movement_speed;
+        let mut position_change: Vector3 = Vector3::new(0.0, 0.0, 0.0);
+        if rl.is_key_down(KeyboardKey::KEY_W) { 
+            position_change.z = self.yaw.to_radians().sin();
+            position_change.x = self.yaw.to_radians().cos();
         } else if rl.is_key_down(KeyboardKey::KEY_S) {
-            self.camera.position.z -= self.yaw.to_radians().sin() * self.movement_speed;
-            self.camera.position.x -= self.yaw.to_radians().cos() * self.movement_speed;
+            position_change.z = -self.yaw.to_radians().sin();
+            position_change.x = -self.yaw.to_radians().cos();
         }
         if rl.is_key_down(KeyboardKey::KEY_A) {
-            self.camera.position.z -= self.yaw.to_radians().cos() * self.movement_speed;
-            self.camera.position.x += self.yaw.to_radians().sin() * self.movement_speed;
+            position_change.z = -self.yaw.to_radians().cos();
+            position_change.x = self.yaw.to_radians().sin();
         } else if rl.is_key_down(KeyboardKey::KEY_D) {
-            self.camera.position.z += self.yaw.to_radians().cos() * self.movement_speed;
-            self.camera.position.x -= self.yaw.to_radians().sin() * self.movement_speed;
+            position_change.z = self.yaw.to_radians().cos();
+            position_change.x = -self.yaw.to_radians().sin();
         }
+        if rl.is_key_down(KeyboardKey::KEY_SPACE) {
+            position_change.y = 1.0;
+        }
+        else if rl.is_key_down(KeyboardKey::KEY_LEFT_SHIFT) {
+            position_change.y = -1.0;
+        }
+        position_change *= delta_time * self.movement_speed;
+    
+        self.move_by(position_change);
 
         // Also update target vector
 

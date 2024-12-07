@@ -5,3 +5,5 @@ I know that I want to do something with a 3D character controller and procedural
 I think the endgame of this project for this timespan of the hackclub highseas stuff is going to be a wilderness survival type of game. Unfortuneately I have no art skills whatsoever, so I'm gonna have to either pay someone to do it, or try to not use assets as much as possible.
 
 I'm going to start with perlin or simplex noise (I have to research which is the right one to use) and procedural terrain.
+
+We need static and dynamic objects.

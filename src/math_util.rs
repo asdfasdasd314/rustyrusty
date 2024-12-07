@@ -1,5 +1,20 @@
 use raylib::prelude::*;
 
+pub const fn cross_product(v1: Vector3, v2: Vector3) -> Vector3 {
+    let x_component = v1.y * v2.z - v1.z * v2.y;
+    let y_component = -1.0 * (v1.x * v2.z - v1.z * v2.x);
+    let z_component = v1.x * v2.y - v1.y * v2.x;
+    return Vector3::new(x_component, y_component, z_component);
+}
+
+pub const fn dot_product(v1: Vector3, v2: Vector3) -> f32 {
+    return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+}
+
+pub fn calculate_magnitude_3d(v: Vector3) -> f32 {
+    return (v.x.powi(2) + v.y.powi(2) + v.z.powi(2)).sqrt();
+}
+
 pub enum PlaneIntersection {
     Line(Line3D),
     VerticalLine(VerticalLine3D),
@@ -12,18 +27,20 @@ pub enum LineIntersection {
     Infinite, // In this case the lines are parallel and contain each other
 }
 
-pub const fn cross_product(v1: Vector3, v2: Vector3) -> Vector3 {
-    let x_component = v1.y * v2.z - v1.z * v2.y;
-    let y_component = -1.0 * (v1.x * v2.z - v1.z * v2.x);
-    let z_component = v1.x * v2.y - v1.y * v2.x;
-    return Vector3::new(x_component, y_component, z_component);
-}
-
 // Theta sweeps across the x-z plane starting at the positive x-axis and goes up to the positive y-axis
 // Phi comes down from the positive y-axis
 pub struct SphericalAngle {
     pub theta: f32,
     pub phi: f32,
+}
+
+impl SphericalAngle {
+    pub fn new(theta: f32, phi: f32) -> SphericalAngle {
+        SphericalAngle {
+            theta,
+            phi,
+        }
+    }
 }
 
 pub struct Plane {
@@ -33,6 +50,8 @@ pub struct Plane {
     pub b: f32,
     pub c: f32,
     pub d: f32,
+
+    // The point (x0, y0, z0) is an absolute point
     pub x0: f32,
     pub y0: f32,
     pub z0: f32,
@@ -75,15 +94,16 @@ pub struct VerticalLine3D {
     pub z0: f32,
 }
 
-pub struct VerticalLine2D {
-    pub x0: f32,
-}
-
 impl VerticalLine3D {
     pub fn new(x0: f32, z0: f32) -> Self {
         VerticalLine3D { x0, z0 }
     }
 }
+
+pub struct VerticalLine2D {
+    pub x0: f32,
+}
+
 
 impl VerticalLine2D {
     pub fn new(x0: f32) -> Self {
@@ -183,9 +203,8 @@ pub fn calculate_difference_in_angle(
     // To make things easier, we'll transform these vectors so that base_vec is on the z-axis
     // We can do this by calculating the angle the base_vec makes with the origin
     // We know x, y, and z, so we can use conversions between ro, theta, and phi to find these changes in angle
-    let base_vec_magnitude = (base_vec.x.powi(2) + base_vec.y.powi(2) + base_vec.z.powi(2)).sqrt();
-    let compare_to_vec_magnitude =
-        (compare_to_vec.x.powi(2) + compare_to_vec.y.powi(2) + compare_to_vec.z.powi(2)).sqrt();
+    let base_vec_magnitude = calculate_magnitude_3d(*base_vec);
+    let compare_to_vec_magnitude = calculate_magnitude_3d(*compare_to_vec);
 
     let base_vec_theta = (base_vec.y / (base_vec.x.powi(2) + base_vec.y.powi(2)).sqrt()).asin();
     let base_vec_phi = base_vec.z / base_vec_magnitude;
@@ -198,4 +217,68 @@ pub fn calculate_difference_in_angle(
         theta: compare_to_vec_theta - base_vec_theta,
         phi: compare_to_vec_phi - base_vec_phi,
     };
+}
+
+pub fn sort_points(points: &mut Vec<Vector3>) {
+    let centroid = points.iter().fold(Vector3::new(0.0, 0.0, 0.0,), |acc, &p| acc + p) / points.len() as f32;
+
+    // We need to project everything onto a 2D plane so we can calculate theta and sort by that
+
+    // Calculate normal by crossing any two vectors in the polygon
+
+    let normal: Vector3;
+
+    let p0 = points[0];
+    let p1 = points[1];
+    let p2 = points[2];
+    
+    let v1 = p1 - p0;
+    let v2 = p2 - p0;
+
+    // Then we cross the other way
+    if dot_product(v1, v2) == 0.0 {
+        let new_v1 = p2 - p1;
+        let new_v2 = p0 - p1;
+        normal = cross_product(new_v1, new_v2);
+    }
+    else {
+        normal = cross_product(v1, v2);
+    }
+   
+    
+    let normal_magnitude = calculate_magnitude_3d(normal);
+
+    let base_vec = p0 - centroid;
+
+    // Use the formula (normal dot v) / (magnitude(normal) * magnitude(v)) = cos(theta)
+    points.sort_by(|a, b| {
+        let a_vec = *a - centroid;
+        let b_vec = *b - centroid;
+        let a_dot = dot_product(a_vec, base_vec);
+        let b_dot = dot_product(b_vec, base_vec);
+        let a_magnitude = calculate_magnitude_3d(a_vec);
+        let b_magnitude = calculate_magnitude_3d(b_vec);
+        let a_angle = (a_dot / (a_magnitude * normal_magnitude)).acos();
+        let b_angle = (b_dot / (b_magnitude * normal_magnitude)).acos();
+        a_angle.partial_cmp(&b_angle).expect(&format!("This should never fail? Angle A: {} Angle B: {}", a_angle, b_angle))
+    });
+}
+
+// This function checks that given some angles, they surround the relative origin they were calculated from
+pub fn check_angles_surround_relative_origin(angles: Vec<SphericalAngle>) -> bool {
+    // TODO For now, brute force
+    for i in 0..(angles.len() - 1) {
+        for j in (i + 1)..angles.len() {
+            // We want to check if the sign flips across the pair in both the theta and phi
+            let angle1 = &angles[i];
+            let angle2 = &angles[j];
+
+            // Sign should be flipped, so check for that (the product should be less than 0)
+            if angle1.theta * angle2.theta <= 0.0 && angle1.phi * angle2.phi <= 0.0 {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }

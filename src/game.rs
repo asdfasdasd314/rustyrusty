@@ -1,11 +1,13 @@
+use raylib::prelude::*;
+
 use crate::physics::*;
 use crate::player::*;
-use raylib::prelude::*;
 
 // This stores the game state and effectively runs everything that has to do with overall game logic
 pub struct Game {
     player: Player,
-    physical_objects: Vec<SolidBody>,
+
+    physical_objects: Vec<RigidBody>,
 
     window_size: (i32, i32),
     window_title: String,
@@ -18,7 +20,7 @@ pub struct Game {
 
 impl Game {
     // Handles all the setup for a game (window, player, world, etc.)
-    pub fn new(player: Player, physical_objects: Vec<SolidBody>, window_size: (i32, i32), window_title: String) -> Game {
+    pub fn new(player: Player, physical_objects: Vec<RigidBody>, window_size: (i32, i32), window_title: String) -> Game {
         let (rl, thread) = raylib::init().size(window_size.0, window_size.1).title(&window_title).build();
         let mut game = Game {
             player,
@@ -39,6 +41,8 @@ impl Game {
     // Perhaps this could change in the future, but the game loop loops forever and never returns
     pub fn game_loop(&mut self) {
         while !self.raylib_handle.window_should_close() {
+            // Calculate delta time
+            let delta_time = self.raylib_handle.get_frame_time();
             // When it comes to the game loop there are a few parts: process inputs, create outputs, render
 
             // Do things about fullscreen and exiting
@@ -58,25 +62,53 @@ impl Game {
         
 
             // Do user input and movement
-            self.player.update(&self.raylib_handle);
+            self.player.update(&self.raylib_handle, delta_time);
 
             // Begin rendering
-            let mut d = self.raylib_handle.begin_drawing(&self.raylib_thread);
+            let mut draw_handle = self.raylib_handle.begin_drawing(&self.raylib_thread);
 
-            d.clear_background(Color::RAYWHITE);
+            draw_handle.clear_background(Color::RAYWHITE);
 
             // This covers everything that is rendered in three dimensions
             {
-                let mut d = d.begin_mode3D(self.player.camera);
+                let mut draw_handle_3d = draw_handle.begin_mode3D(self.player.camera);
 
                 for object in &self.physical_objects {
-                    object.mesh.render(&mut d);
+                    object.mesh.render(&mut draw_handle_3d);
                 }
+            }
+
+            draw_handle.draw_fps(10, 10);
+
+            let mut all_objects: Vec<&RigidBody> = Vec::new();
+
+            for physical_object in self.physical_objects.iter() {
+                all_objects.push(physical_object);
+            }
+
+            all_objects.push(&self.player.rigid_body);
+
+            let colliding_objects = find_colliding_objects(&all_objects);
+            if colliding_objects.len() > 0 {
+                println!("Colliding");
             }
         }
     }
 
-    pub fn add_physical_object(&mut self, new_object: SolidBody) {
+    pub fn add_physical_object(&mut self, new_object: RigidBody) {
         self.physical_objects.push(new_object);
     }
+}
+
+fn find_colliding_objects(objects: &[&RigidBody]) -> Vec<(usize, usize)> {
+    let mut colliding_objects: Vec<(usize, usize)> = Vec::new();
+    for i in 0..objects.len() - 1 {
+        for j in i..objects.len() {
+            if rigid_bodies_collide(&objects[i], &objects[j]) {
+                colliding_objects.push((i, j));
+            }
+        }
+    }
+
+    colliding_objects
 }
