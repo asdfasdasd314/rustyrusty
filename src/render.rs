@@ -1,6 +1,6 @@
-use std::fmt::Debug;
-use raylib::prelude::*;
 use crate::math_util::*;
+use raylib::prelude::*;
+use std::fmt::Debug;
 
 // This is only really a useful abstraction for rendering or calculating collisions
 #[derive(Debug)]
@@ -10,8 +10,18 @@ pub struct Polygon {
 }
 
 impl Polygon {
-    pub fn new(points: Vec<Vector3>) -> Self {
+    pub fn new(mut points: Vec<Vector3>) -> Self {
+        // Ensure the points are stored in a cyclical order (sorted)
+        sort_points_by_angle_from_centroid(&mut points);
         Polygon { points }
+    }
+
+    pub fn get_edges(&self) -> Vec<(Vector3, Vector3)> {
+        let mut edges: Vec<(Vector3, Vector3)> = Vec::with_capacity(self.points.len());
+        for i in 0..self.points.len() {
+            edges.push((self.points[i], self.points[(i + 1) % self.points.len()]));
+        }
+        return edges;
     }
 }
 
@@ -115,17 +125,34 @@ impl MeshShape for RectangularPrism {
         let polygons = self.get_polygons();
 
         let mut color_index = 0;
-        let colors = vec![Color::RED, Color::BLACK, Color::YELLOW, Color::GREEN, Color::BLUE, Color::PURPLE];
+        let colors = vec![
+            Color::RED,
+            Color::BLACK,
+            Color::YELLOW,
+            Color::GREEN,
+            Color::BLUE,
+            Color::PURPLE,
+        ];
         for polygon in polygons {
             let mut polygon_points = polygon.points;
-            sort_points(&mut polygon_points);
-            
+            sort_points_by_angle_from_centroid(&mut polygon_points);
+
             for i in 0..polygon_points.len() - 2 {
                 // Draw the front side
-                draw_mode.draw_triangle3D(polygon_points[i], polygon_points[i + 1], polygon_points[i + 2], colors[color_index]);
+                draw_mode.draw_triangle3D(
+                    polygon_points[i],
+                    polygon_points[i + 1],
+                    polygon_points[i + 2],
+                    colors[color_index],
+                );
 
                 // Draw the back side
-                draw_mode.draw_triangle3D(polygon_points[i + 2], polygon_points[i + 1], polygon_points[i], colors[color_index]);
+                draw_mode.draw_triangle3D(
+                    polygon_points[i + 2],
+                    polygon_points[i + 1],
+                    polygon_points[i],
+                    colors[color_index],
+                );
             }
 
             color_index += 1;

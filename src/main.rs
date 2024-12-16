@@ -1,20 +1,20 @@
-use std::rc::Rc;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 use raylib::prelude::*;
 
-use crate::physics::*;
 use crate::game::*;
+use crate::physics::*;
 use crate::player::*;
 use crate::render::*;
 
 mod game;
+mod heap;
 mod math_util;
 mod physics;
 mod player;
-mod world_gen;
 mod render;
-
+mod world_gen;
 
 fn main() {
     let player_rect = RectangularPrism::new(Vector3::new(0.0, 0.0, 0.0), 1.0, 1.0, 1.0);
@@ -23,7 +23,7 @@ fn main() {
     //let solid_body1 = RigidBody::new(Box::new(rect1));
     let solid_body2 = RigidBody::new(Vector3::new(1.0, 2.0, 3.0), Box::new(rect2));
     let rb = RigidBody::new(Vector3::new(0.0, 0.0, 0.0), Box::new(player_rect));
-    let player = Player::new(Vector3::new(0.0, 0.0, 0.0,), 10.0, 0.1, rb);
+    let player = Player::new(Vector3::new(0.0, 0.0, 0.0), 10.0, 0.1, rb);
     let mut game = Game::new(player, vec![solid_body2], (640, 480), "Game".to_string());
 
     game.game_loop();

@@ -20,8 +20,16 @@ pub struct Game {
 
 impl Game {
     // Handles all the setup for a game (window, player, world, etc.)
-    pub fn new(player: Player, physical_objects: Vec<RigidBody>, window_size: (i32, i32), window_title: String) -> Game {
-        let (rl, thread) = raylib::init().size(window_size.0, window_size.1).title(&window_title).build();
+    pub fn new(
+        player: Player,
+        physical_objects: Vec<RigidBody>,
+        window_size: (i32, i32),
+        window_title: String,
+    ) -> Game {
+        let (rl, thread) = raylib::init()
+            .size(window_size.0, window_size.1)
+            .title(&window_title)
+            .build();
         let mut game = Game {
             player,
             physical_objects,
@@ -53,13 +61,11 @@ impl Game {
                 if self.cursor_shown {
                     self.raylib_handle.hide_cursor();
                     self.raylib_handle.disable_cursor();
-                }
-                else {
+                } else {
                     self.raylib_handle.show_cursor();
                 }
-               self.cursor_shown = !self.cursor_shown;
+                self.cursor_shown = !self.cursor_shown;
             }
-        
 
             // Do user input and movement
             self.player.update(&self.raylib_handle, delta_time);

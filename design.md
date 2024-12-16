@@ -7,3 +7,5 @@ I think the endgame of this project for this timespan of the hackclub highseas s
 I'm going to start with perlin or simplex noise (I have to research which is the right one to use) and procedural terrain.
 
 We need static and dynamic objects.
+
+So I'm gonna come back to that, I think in order for rendering to make sense, the points stored in a polygon should be sorted at the time of creation of the polygon, so I need to enforce this change across the existing codebase up to now
