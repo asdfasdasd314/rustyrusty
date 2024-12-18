@@ -1,21 +1,30 @@
 use std::convert;
 
+use crate::heap::custom_heap::*;
 use crate::{convert_polygon_to_plane, render::Polygon};
 use raylib::prelude::*;
 
-pub const fn cross_product(v1: Vector3, v2: Vector3) -> Vector3 {
+pub const fn cross_product(v1: &Vector3, v2: &Vector3) -> Vector3 {
     let x_component = v1.y * v2.z - v1.z * v2.y;
     let y_component = -1.0 * (v1.x * v2.z - v1.z * v2.x);
     let z_component = v1.x * v2.y - v1.y * v2.x;
     return Vector3::new(x_component, y_component, z_component);
 }
 
-pub const fn dot_product(v1: &Vector3, v2: &Vector3) -> f32 {
+pub const fn dot_product_3d(v1: &Vector3, v2: &Vector3) -> f32 {
     return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
-pub fn calculate_magnitude_3d(v: Vector3) -> f32 {
+pub const fn dot_product_2d(v1: &Vector2, v2: &Vector2) -> f32 {
+    return v1.x * v2.x + v1.y * v2.y;
+}
+
+pub fn calculate_magnitude_3d(v: &Vector3) -> f32 {
     return (v.x.powi(2) + v.y.powi(2) + v.z.powi(2)).sqrt();
+}
+
+pub fn calculate_magnitude_2d(v: &Vector2) -> f32 {
+    return (v.x.powi(2) + v.y.powi(2)).sqrt();
 }
 
 pub enum PlaneIntersection {
@@ -95,11 +104,11 @@ pub fn project_point_onto_plane(point: &Vector3, plane: &Plane) -> Vector3 {
     let normal_vec = Vector3::new(plane.a, plane.b, plane.c);
     let d_vec = *point - plane.p0;
 
-    let normal_magnitude = calculate_magnitude_3d(normal_vec);
-    let d_magnitude = calculate_magnitude_3d(d_vec);
+    let normal_magnitude = calculate_magnitude_3d(&normal_vec);
+    let d_magnitude = calculate_magnitude_3d(&d_vec);
 
     // theta is in radians
-    let theta = (dot_product(&normal_vec, &d_vec) / (normal_magnitude * d_magnitude)).acos();
+    let theta = (dot_product_3d(&normal_vec, &d_vec) / (normal_magnitude * d_magnitude)).acos();
 
     let height = d_magnitude * (90.0 - theta.to_degrees());
     let height_vec = normal_vec * (height / normal_magnitude);
@@ -107,44 +116,52 @@ pub fn project_point_onto_plane(point: &Vector3, plane: &Plane) -> Vector3 {
     return *point - height_vec;
 }
 
-struct RootPoint {
-    pub true_root: Vector3,
-    // This "helper root" is necessary when calculating the angle from the true root to something else
-    pub helper_root: Vector3,
+// p0 is the bottom-leftmost point that can contain the polygon, this is usually a combination of the leftmost and bottommost points, but in the case that they are the same then it's that point 1 unit left in the x direction
+// p1 is the root point of the polygon
+#[derive(Debug)]
+pub struct ComparisonAxis {
+    pub p0: Vector2,
+    pub p1: Vector2,
 }
-fn calculate_root_point(projected_points: &[Vector3]) -> RootPoint {
-    let mut min_point_index = 0;
-    for i in 0..projected_points.len() {
-        if projected_points[i].y <= projected_points[min_point_index].y {
-            if projected_points[i].y < projected_points[min_point_index].y {
-                min_point_index = i;
+
+impl ComparisonAxis {
+    pub fn new(points: &[Vector2]) -> ComparisonAxis {
+        let mut min_x_index = 0;
+        let mut min_y_index = 0;
+        for i in 0..points.len() {
+            if points[i].y < points[min_y_index].y {
+                min_y_index = i;
             }
-            // Otherwise compare the x and z values
-            else {
-                if projected_points[i].z <= projected_points[min_point_index].z {
-                    if projected_points[i].z < projected_points[min_point_index].z {
-                        min_point_index = i;
-                    } else {
-                        if projected_points[i].x < projected_points[min_point_index].x {
-                            min_point_index = i;
-                        }
-                    }
-                }
+            // Otherwise compare the x
+            else if points[i].y == points[min_y_index].y && points[i].x < points[min_y_index].x {
+                min_y_index = i;
+            }
+
+            // We don't any more complicated logic for this because we just need the x-coordinate
+            if points[i].x < points[min_x_index].x {
+                min_x_index = i;
             }
         }
-    }
 
-    return RootPoint {
-        true_root: projected_points[min_point_index],
-        helper_root: Vector3::new(
-            projected_points[min_point_index].x - 1.0,
-            projected_points[min_point_index].y,
-            projected_points[min_point_index].z,
-        ),
-    };
+        let p1;
+        let p0;
+        if min_x_index == min_y_index {
+            p1 = points[min_y_index];
+            p0 = Vector2::new(p1.x - 1.0, p1.y);
+        } else {
+            p1 = points[min_y_index];
+            p0 = Vector2::new(points[min_x_index].x, p1.y);
+        }
+
+        ComparisonAxis { p0, p1 }
+    }
 }
 
-fn graham_scan(projected_points: &[Vector3]) -> Polygon {
+fn graham_scan(projected_points: &[Vector2]) -> Vec<usize> {
+    todo!()
+}
+
+fn project_points_to_2d(points: &[Vector3]) -> Vec<Vector2> {
     todo!()
 }
 
@@ -158,17 +175,25 @@ pub fn project_mesh_onto_plane(plane: &Plane, mesh_polygons: &[Polygon]) -> Poly
         }
     }
 
-    // Find the point with the lowest y-value when projected onto the x-y plane
-    // It's not clear what the "bottom left point" is if the plane is three dimensional, and sometimes the minimum x-value is also necessary, so we project the points onto an actual 2D plane
-    // Where there is no z coordinate
-    let root_point = calculate_root_point(&projected_points);
+    // Convert the points to 2D
+    let mut two_dimensional_points = project_points_to_2d(&projected_points);
+
+    // Get the axis for which all points will be compared to
+    let comparison_axis = ComparisonAxis::new(&two_dimensional_points);
 
     // Perform Graham's check to get the points of the polygon
 
     // Sort based on the root pointt
-    sort_points_by_angle_from_root(&mut projected_points, &root_point);
+    heapsort(&comparison_axis, &mut two_dimensional_points);
 
-    return graham_scan(&projected_points);
+    let bounding_indices = graham_scan(&two_dimensional_points);
+
+    let mut polygon_points: Vec<Vector3> = Vec::with_capacity(bounding_indices.len());
+    for index in bounding_indices {
+        polygon_points.push(projected_points[index]);
+    }
+
+    return Polygon::new(polygon_points);
 }
 
 pub fn project_polygon_onto_line(line: &Line3D, polygon: &Polygon) -> (Vector3, Vector3) {
@@ -178,14 +203,15 @@ pub fn project_polygon_onto_line(line: &Line3D, polygon: &Polygon) -> (Vector3, 
     let mut right = points.len() - 1;
 
     let mut max_distance: f32 = calculate_magnitude_3d(
-        project_point_onto_line(line, points[right]) - project_point_onto_line(line, points[left]),
+        &(project_point_onto_line(line, points[right])
+            - project_point_onto_line(line, points[left])),
     );
 
     // Move the left pointer to the right and go until the distance is less
     while left < right {
         let curr_distance = calculate_magnitude_3d(
-            project_point_onto_line(line, points[right])
-                - project_point_onto_line(line, points[left]),
+            &(project_point_onto_line(line, points[right])
+                - project_point_onto_line(line, points[left])),
         );
         if curr_distance > max_distance {
             max_distance = curr_distance;
@@ -200,8 +226,8 @@ pub fn project_polygon_onto_line(line: &Line3D, polygon: &Polygon) -> (Vector3, 
     // Move the right pointer to the left and go until the distance is less
     while left < right {
         let curr_distance = calculate_magnitude_3d(
-            project_point_onto_line(line, points[right])
-                - project_point_onto_line(line, points[left]),
+            &(project_point_onto_line(line, points[right])
+                - project_point_onto_line(line, points[left])),
         );
         if curr_distance > max_distance {
             max_distance = curr_distance;
@@ -221,7 +247,7 @@ fn project_point_onto_line(line: &Line3D, point: Vector3) -> Vector3 {
     let v = line.v;
     let u = point - line.p0;
     // u_initial + projv(u) = projected point
-    return point + v * (dot_product(&v, &u) / dot_product(&v, &v));
+    return point + v * (dot_product_3d(&v, &u) / dot_product_3d(&v, &v));
 }
 
 /**
@@ -248,7 +274,7 @@ pub fn calculate_orthogonal_planes(polygon: &Polygon) -> Vec<Plane> {
     let mut planes: Vec<Plane> = Vec::with_capacity(polygon.points.len());
     for edge in polygon.get_edges() {
         let edge_vec = edge.1 - edge.0;
-        let new_normal = cross_product(normal, edge_vec);
+        let new_normal = cross_product(&normal, &edge_vec);
         planes.push(Plane::from_point_and_normal(edge.0, new_normal));
     }
     return planes;
@@ -261,9 +287,9 @@ pub fn line_segments_overlap(
     line_segment1: (Vector3, Vector3),
     line_segment2: (Vector3, Vector3),
 ) -> bool {
-    let line_segment1_magnitude = calculate_magnitude_3d(line_segment1.1 - line_segment1.0);
-    let distance1 = calculate_magnitude_3d(line_segment1.1 - line_segment2.0);
-    let distance2 = calculate_magnitude_3d(line_segment1.1 - line_segment2.1);
+    let line_segment1_magnitude = calculate_magnitude_3d(&(line_segment1.1 - line_segment1.0));
+    let distance1 = calculate_magnitude_3d(&(line_segment1.1 - line_segment2.0));
+    let distance2 = calculate_magnitude_3d(&(line_segment1.1 - line_segment2.1));
     return distance1 < line_segment1_magnitude || distance2 < line_segment1_magnitude;
 }
 
@@ -291,8 +317,8 @@ pub fn calculate_line_intersection_between_planes(
     }
 
     let parallel = cross_product(
-        Vector3::new(plane1.a, plane1.b, plane1.c),
-        Vector3::new(plane2.a, plane2.b, plane2.c),
+        &Vector3::new(plane1.a, plane1.b, plane1.c),
+        &Vector3::new(plane2.a, plane2.b, plane2.c),
     );
 
     // We just need a point, so we need to find a point that both plane1 and plane2 have
@@ -351,8 +377,8 @@ pub fn calculate_difference_in_angle(
     // To make things easier, we'll transform these vectors so that base_vec is on the z-axis
     // We can do this by calculating the angle the base_vec makes with the origin
     // We know x, y, and z, so we can use conversions between ro, theta, and phi to find these changes in angle
-    let base_vec_magnitude = calculate_magnitude_3d(*base_vec);
-    let compare_to_vec_magnitude = calculate_magnitude_3d(*compare_to_vec);
+    let base_vec_magnitude = calculate_magnitude_3d(base_vec);
+    let compare_to_vec_magnitude = calculate_magnitude_3d(compare_to_vec);
 
     let base_vec_theta = (base_vec.y / (base_vec.x.powi(2) + base_vec.y.powi(2)).sqrt()).asin();
     let base_vec_phi = base_vec.z / base_vec_magnitude;
@@ -387,15 +413,15 @@ pub fn sort_points_by_angle_from_centroid(points: &mut Vec<Vector3>) {
     let v2 = p2 - p0;
 
     // Then we cross the other way
-    if dot_product(&v1, &v2) == 0.0 {
+    if dot_product_3d(&v1, &v2) == 0.0 {
         let new_v1 = p2 - p1;
         let new_v2 = p0 - p1;
-        normal = cross_product(new_v1, new_v2);
+        normal = cross_product(&new_v1, &new_v2);
     } else {
-        normal = cross_product(v1, v2);
+        normal = cross_product(&v1, &v2);
     }
 
-    let normal_magnitude = calculate_magnitude_3d(normal);
+    let normal_magnitude = calculate_magnitude_3d(&normal);
 
     let base_vec = p0 - centroid;
 
@@ -403,10 +429,10 @@ pub fn sort_points_by_angle_from_centroid(points: &mut Vec<Vector3>) {
     points.sort_by(|a, b| {
         let a_vec = *a - centroid;
         let b_vec = *b - centroid;
-        let a_dot = dot_product(&a_vec, &base_vec);
-        let b_dot = dot_product(&b_vec, &base_vec);
-        let a_magnitude = calculate_magnitude_3d(a_vec);
-        let b_magnitude = calculate_magnitude_3d(b_vec);
+        let a_dot = dot_product_3d(&a_vec, &base_vec);
+        let b_dot = dot_product_3d(&b_vec, &base_vec);
+        let a_magnitude = calculate_magnitude_3d(&a_vec);
+        let b_magnitude = calculate_magnitude_3d(&b_vec);
         let a_angle = (a_dot / (a_magnitude * normal_magnitude)).acos();
         let b_angle = (b_dot / (b_magnitude * normal_magnitude)).acos();
         a_angle.partial_cmp(&b_angle).expect(&format!(
@@ -415,10 +441,6 @@ pub fn sort_points_by_angle_from_centroid(points: &mut Vec<Vector3>) {
         ))
     });
 }
-
-fn heap_sort_helper(points: &mut Vec<Vector3>) {}
-
-pub fn sort_points_by_angle_from_root(points: &mut Vec<Vector3>, root_point: &Vector3) {}
 
 // This function checks that given some angles, they surround the relative origin they were calculated from
 pub fn check_angles_surround_relative_origin(angles: Vec<SphericalAngle>) -> bool {

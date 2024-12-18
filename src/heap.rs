@@ -1,9 +1,39 @@
 use crate::math_util::*;
 use raylib::prelude::*;
 
-fn calculate_cos_of_angle(vec1: &Vector3, vec2: &Vector3) -> f32 {
-    return dot_product(vec1, vec2)
-        / (calculate_magnitude_3d(*vec1) * calculate_magnitude_3d(*vec2));
+fn calculate_cos_of_angle(vec1: &Vector2, vec2: &Vector2) -> f32 {
+    return dot_product_2d(vec1, vec2)
+        / (calculate_magnitude_2d(vec1) * calculate_magnitude_2d(vec2));
+}
+
+/**
+Returns true if the first point should come before the second point,
+and false if the second point should come before the first point
+
+I understand this is what the key would be if I just used sort_by(), but I think there's optimizations I could do with a heap in the future
+and I just wanted to implement a heap because it's cool, and now I have a much better understanding of them
+ */
+fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Vector2, point2: &Vector2) -> bool {
+    let root_vec = comparison_axis.p1 - comparison_axis.p0;
+
+    let vec1 = *point1 - comparison_axis.p0;
+    let vec2 = *point2 - comparison_axis.p0;
+    let cos_angle1 = calculate_cos_of_angle(&root_vec, &vec1);
+    let cos_angle2 = calculate_cos_of_angle(&root_vec, &vec2);
+
+    if cos_angle1 > cos_angle2 {
+        return true;
+    }
+    else if cos_angle1 < cos_angle2 {
+        return false;
+    }
+    else {
+        // Otherwise compare the distance to the point
+        let distance1 = calculate_magnitude_2d(&vec1);
+        let distance2 = calculate_magnitude_2d(&vec2);
+
+        return distance1 > distance2;
+    }
 }
 
 /**
@@ -13,15 +43,19 @@ This is a min heap where there are no duplicates and the sorting key is the angl
 pub mod custom_heap {
     use super::*;
 
+    pub fn get_min_point(heap: &[Vector2]) -> Vector2 {
+        return heap[0];
+    }
+
     fn get_parent_index(index: usize) -> Option<usize> {
-        let parent_index = (index - 1) / 2;
+        let parent_index: isize = (index as isize - 1) / 2;
         if parent_index < 0 {
             return None;
         }
-        return Some(parent_index);
+        return Some(parent_index as usize);
     }
 
-    fn get_left_child_index(heap: &[Vector3], index: usize) -> Option<usize> {
+    fn get_left_child_index(heap: &[Vector2], index: usize) -> Option<usize> {
         let left_child_index = 2 * index + 1;
         if left_child_index >= heap.len() {
             return None;
@@ -29,7 +63,7 @@ pub mod custom_heap {
         return Some(left_child_index);
     }
 
-    fn get_right_child_index(heap: &[Vector3], index: usize) -> Option<usize> {
+    fn get_right_child_index(heap: &[Vector2], index: usize) -> Option<usize> {
         let right_child_index = 2 * index + 2;
         if right_child_index >= heap.len() {
             return None;
@@ -43,40 +77,24 @@ pub mod custom_heap {
     `helper_node` is another point that defines the line for which all points will compare their angle with it to, this should be one -1 units from the actual root in the x direction
      */
     fn sift_up(
-        helper_node: &Vector3,
-        actual_root: &Vector3,
+        comparison_axis: &ComparisonAxis,
         mut index: usize,
-        heap: &mut Vec<Vector3>,
+        heap: &mut Vec<Vector2>,
     ) {
-        let comparison_vec = *helper_node - *actual_root;
         while index > 0 {
             let point = heap[index];
-            let point_vec = point - *actual_root;
-            let cos_of_angle = calculate_cos_of_angle(&comparison_vec, &point_vec);
             let parent_index = get_parent_index(index).expect("This should not panic because we already checked that the index isn't the minimum index");
 
             let parent_point = heap[parent_index];
-            let parent_vec = parent_point - *actual_root;
-            let cos_of_parent_angle = calculate_cos_of_angle(&comparison_vec, &parent_vec);
 
-            if cos_of_parent_angle < cos_of_angle {
+            let parent_first = compare_order_of_two_points(comparison_axis, &parent_point, &point);
+
+            if parent_first {
                 break;
-            } else {
-                if cos_of_angle == cos_of_parent_angle {
-                    // Calculate distance between points
-                    if calculate_magnitude_3d(parent_vec) > calculate_magnitude_3d(point_vec) {
-                        break;
-                    } else {
-                        // `point` exists at `index`, and `parent_point` exists at `parent_index`
-                        heap[index] = parent_point;
-                        heap[parent_index] = point;
-                    }
-                } else {
-                    heap[index] = parent_point;
-                    heap[parent_index] = point;
-                }
             }
 
+            heap[index] = parent_point;
+            heap[parent_index] = point;
             index = parent_index;
         }
     }
@@ -87,105 +105,45 @@ pub mod custom_heap {
     `helper_node` is another point that defines the line for which all points will compare their angle with it to
      */
     fn sift_down(
-        helper_point: &Vector3,
-        actual_root: &Vector3,
+        comparison_axis: &ComparisonAxis,
         mut index: usize,
-        heap: &mut Vec<Vector3>,
+        heap: &mut Vec<Vector2>,
     ) {
-        let comparison_vec = *helper_point - *actual_root;
         while index < heap.len() {
-            let point = heap[index];
-            let point_vec = point - *actual_root;
-            let cos_of_angle = calculate_cos_of_angle(&comparison_vec, &point_vec);
+            let left_index = get_left_child_index(heap, index);
+            let max_index = match left_index {
+                Some(left_index) => {
+                    let mut largest = index;
+                    if !compare_order_of_two_points(comparison_axis, &heap[index], &heap[left_index]) {
+                        largest = left_index
+                    }
 
-            let left_child_index = get_left_child_index(heap, index);
-           
-            let left_child_point: Vector3;
-            let left_child_vec: Vector3;
-            let cos_of_left_child_angle: f32;
+                    let right_index = get_right_child_index(heap, index);
+                    match right_index {
+                        Some(right_index) => {
+                            if !compare_order_of_two_points(comparison_axis, &heap[largest], &heap[right_index]) {
+                                largest = right_index;
+                            }
+                        }
+                        None => {}
+                    }
 
-            match left_child_index {
-                Some(left_child_index) => {
-                    // Calculate things for the left child
-                    left_child_point = heap[left_child_index];
-                    left_child_vec = left_child_point - *actual_root;
-                    cos_of_left_child_angle = calculate_cos_of_angle(&comparison_vec, &left_child_vec);
+                    largest
                 }
                 None => {
-                    // We break because we have reached a leaf of the heap
-                    break;
+                    // Just give the index because we're at a leaf
+                    index
                 }
             };
 
-            let right_child_index = get_right_child_index(heap, index);
-
-            let right_child_point: Vector3;
-            let right_child_vec: Vector3;
-            let cos_of_right_child_angle: f32;
-
-            match right_child_index {
-                Some(right_child_index) => {
-                    // Calculate things for the right child        
-                    right_child_point = heap[right_child_index];
-                    right_child_vec = right_child_point - *actual_root;
-                    cos_of_right_child_angle = calculate_cos_of_angle(&comparison_vec, &right_child_vec);
-                }
-                None => {
-                    // Swap with the left child
-                    heap[index] = left_child_point;
-                    heap[left_child_index.unwrap()] = point;
-                    index = left_child_index.unwrap();
-                    continue;
-                }
+            if max_index == index {
+                break;
             }
 
-            if cos_of_right_child_angle < cos_of_left_child_angle {
-                // Check if we need to swap
-                if cos_of_angle == cos_of_right_child_angle {
-                    // Calculate distances
-                    if calculate_magnitude_3d(point_vec) > calculate_magnitude_3d(right_child_vec) {
-                        break;
-                    }
-                    else {
-                        heap[index] = right_child_point;
-                        heap[right_child_index.unwrap()] = point;
-                        index = right_child_index.unwrap();
-                        continue;
-                    }
-                }
-                else if cos_of_angle < cos_of_right_child_angle {
-                    break;
-                }
-                else {
-                    heap[index] = right_child_point;
-                    heap[right_child_index.unwrap()] = point;
-                    index = right_child_index.unwrap();
-                    continue;
-                }
-            }
-            else {
-                // Check if we need to swap
-                if cos_of_angle == cos_of_left_child_angle {
-                    if calculate_magnitude_3d(point_vec) > calculate_magnitude_3d(left_child_vec) {
-                        break;
-                    }
-                    else {
-                        heap[index] = left_child_point;
-                        heap[left_child_index.unwrap()] = point;
-                        index = left_child_index.unwrap();
-                        continue;
-                    }
-                }
-                else if cos_of_angle < cos_of_left_child_angle {
-                    break;
-                }
-                else {
-                    heap[index] = left_child_point;
-                    heap[left_child_index.unwrap()] = point;
-                    index = left_child_index.unwrap();
-                    continue;
-                }
-            }
+            let temp_point = heap[index];
+            heap[index] = heap[max_index];
+            heap[max_index] = temp_point;
+            index = max_index;
         }
     }
 
@@ -195,12 +153,11 @@ pub mod custom_heap {
     `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
      */
     pub fn heapify(
-        actual_root: &Vector3,
-        helper_point: &Vector3,
-        array: &mut Vec<Vector3>,
+        comparison_axis: &ComparisonAxis,
+        array: &mut Vec<Vector2>,
     ) {
-        for i in (0..array.len()).rev() {
-            sift_down(helper_point, actual_root, i, array);
+        for i in (0..array.len() / 2).rev() {
+            sift_down(comparison_axis, i, array);
         }
     }
 
@@ -210,28 +167,26 @@ pub mod custom_heap {
     `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
      */
     pub fn heap_push(
-        actual_root: &Vector3,
-        helper_point: &Vector3,
-        new_element: Vector3,
-        heap: &mut Vec<Vector3>,
+        comparison_axis: &ComparisonAxis,
+        new_element: Vector2,
+        heap: &mut Vec<Vector2>,
     ) {
         // Push the element
         heap.push(new_element);
 
         // Restore the heap
-        sift_up(actual_root, helper_point, heap.len() - 1, heap);
+        sift_up(comparison_axis, heap.len() - 1, heap);
     }
 
     /**
     Pops the min element from the heap and returns it, returns None if there are no elements to pop
-    `comparison_root` is the root point of the polygon
-    `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
+    `actual_root` is the root point of the polygon
+    `helper_point` is another point that defines the line for which all points will compare their angle with it to
      */
     pub fn heap_pop(
-        actual_root: &Vector3,
-        helper_point: &Vector3,
-        heap: &mut Vec<Vector3>,
-    ) -> Option<Vector3> {
+        comparison_axis: &ComparisonAxis,
+        heap: &mut Vec<Vector2>,
+    ) -> Option<Vector2> {
         if heap.len() == 0 {
             return None;
         }
@@ -242,31 +197,70 @@ pub mod custom_heap {
         heap.pop();
 
         // Restore the heap
-        sift_down(actual_root, helper_point, 0, heap);
+        sift_down(comparison_axis, 0, heap);
 
         return Some(pop_element);
     }
 
     /**
     Sorts the array using heapsort
-    `comparison_root` is the root point of the polygon
-    `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
+    `actual_root` is the root point of the polygon
+    `comparison_point` is another point that defines the line for which all points will compare their angle with it to
      */
-    pub fn heap_sort(
-        comparison_root: &Vector3,
-        comparison_helper: &Vector3,
-        array: &mut Vec<Vector3>,
+    pub fn heapsort(
+        comparison_axis: &ComparisonAxis,
+        array: &mut Vec<Vector2>,
     ) {
-        heapify(comparison_root, comparison_helper, array);
+        heapify(comparison_axis, array);
+        println!("{:#?}", array);
         // We use Vec::new() and not Vec::with_capacity() because technically this will be O(1) space
-        let mut new_array: Vec<Vector3> = Vec::new();
+        let mut new_array: Vec<Vector2> = Vec::new();
         for _ in 0..array.len() {
-            new_array.push(heap_pop(comparison_root, comparison_helper, array).unwrap());
+            new_array.push(heap_pop(comparison_axis, array).unwrap());
 
             // I 1000000% understand that this is slower, but for the purpose of the O(1) space, which honestly if I'm implementing heapsort, I'm more interested in the space
             // then this is better
             array.shrink_to_fit();
         }
         *array = new_array;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use raylib::prelude::*;
+    use super::*;
+    use super::custom_heap::*;
+
+    fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Vector2]) -> bool {
+        for i in 0..values.len() - 1 {
+            if !compare_order_of_two_points(comparison_axis, &values[i], &values[i + 1]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    #[test]
+    fn test_heapsort() {
+        let mut points = vec![
+            Vector2::new(0.0, 0.0),
+            Vector2::new(1.0, 0.5),
+            Vector2::new(1.0, 0.0),
+            Vector2::new(1.0, 1.0),
+            Vector2::new(0.0, 2.0),
+            Vector2::new(1.0, 2.5),
+            Vector2::new(2.0, 0.0),
+            Vector2::new(1.0, 2.0),
+            Vector2::new(-1.0, 1.0),
+            Vector2::new(-2.0, 1.0),
+            Vector2::new(-0.5, 1.0),
+        ];
+
+        let comparison_axis = ComparisonAxis::new(&points);
+        heapsort(&comparison_axis, &mut points);
+   
+        assert!(is_sorted(&comparison_axis, &points));
     }
 }

@@ -40,7 +40,7 @@ pub fn convert_polygon_to_plane(polygon: &Polygon) -> Plane {
 
     let v2 = Vector3::new(p2.x - p0.x, p2.y - p0.y, p2.z - p0.z);
 
-    let cross = cross_product(v1, v2);
+    let cross = cross_product(&v1, &v2);
 
     Plane::from_point_and_normal(*p0, cross)
 }
