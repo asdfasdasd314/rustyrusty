@@ -212,7 +212,6 @@ pub mod custom_heap {
         array: &mut Vec<Vector2>,
     ) {
         heapify(comparison_axis, array);
-        println!("{:#?}", array);
         // We use Vec::new() and not Vec::with_capacity() because technically this will be O(1) space
         let mut new_array: Vec<Vector2> = Vec::new();
         for _ in 0..array.len() {

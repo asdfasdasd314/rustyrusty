@@ -34,26 +34,30 @@ impl RigidBody {
 
 fn separating_axis_theorem(polygon1: &Polygon, polygon2: &Polygon) -> bool {
     for i in 0..polygon1.points.len() {
-        let line_segment1 = polygon1.get_edges()[i];
+        let line_segment = polygon1.get_edges()[i];
         let third_point = polygon1.get_edges()[(i + 1) % polygon1.points.len()].1; // Borrow another point so we can calculate the normal vector to the line
-
-        let projection_line = calculate_orthogonal_line(&line_segment1, &third_point);
-
+        let u = line_segment.1 - line_segment.0;
+        let v = third_point - line_segment.0;
+        let polygon_normal = cross_product(&u, &v);
+        let normal = u.cross(polygon_normal);
+        let projection_line = Line3D::from_point_and_parallel_vec(line_segment.0, normal);
+        let line_segment1 = project_polygon_onto_line(&projection_line, polygon1);
         let line_segment2 = project_polygon_onto_line(&projection_line, polygon2);
-
         if !line_segments_overlap(line_segment1, line_segment2) {
             return false;
         }
     }
 
     for i in 0..polygon2.points.len() {
-        let line_segment1 = polygon2.get_edges()[i];
+        let line_segment = polygon2.get_edges()[i];
         let third_point = polygon2.get_edges()[(i + 1) % polygon1.points.len()].1;
-
-        let projection_line = calculate_orthogonal_line(&line_segment1, &third_point);
-
+        let u = line_segment.1 - line_segment.0;
+        let v = third_point - line_segment.0;
+        let polygon_normal = cross_product(&u, &v);
+        let normal = u.cross(polygon_normal);
+        let projection_line = Line3D::from_point_and_parallel_vec(line_segment.0, normal);
+        let line_segment1 = project_polygon_onto_line(&projection_line, polygon1);
         let line_segment2 = project_polygon_onto_line(&projection_line, polygon2);
-
         if !line_segments_overlap(line_segment1, line_segment2) {
             return false;
         }
@@ -61,35 +65,44 @@ fn separating_axis_theorem(polygon1: &Polygon, polygon2: &Polygon) -> bool {
 
     return true;
 }
+
 pub fn rigid_bodies_collide(rigid_body1: &RigidBody, rigid_body2: &RigidBody) -> bool {
     let self_polygons = rigid_body1.mesh.get_polygons();
     let other_polygons = rigid_body2.mesh.get_polygons();
     for polygon1 in &self_polygons {
         let projection_planes = calculate_orthogonal_planes(&polygon1);
-        let projected_polygons: Vec<Polygon> = projection_planes
+        let projected_polygons1: Vec<Polygon> = projection_planes
+            .iter()
+            .map(|plane| project_mesh_onto_plane(plane, &self_polygons))
+            .collect();
+        let projected_polygons2: Vec<Polygon> = projection_planes
             .iter()
             .map(|plane| project_mesh_onto_plane(plane, &other_polygons))
             .collect();
 
         // Perform the separating axis theorem for each polygon
-        for polygon2 in projected_polygons.iter() {
-            if !separating_axis_theorem(&polygon1, polygon2) {
+        for (projected_polygon1, projected_polygon2) in projected_polygons1.iter().zip(projected_polygons2.iter()) {
+            if !separating_axis_theorem(&projected_polygon1, &projected_polygon2) {
                 return false;
             }
         }
     }
 
     // We have to the same procedure with the other shape according to the algorithm
-    for polygon1 in other_polygons {
+    for polygon1 in &other_polygons {
         let projection_planes = calculate_orthogonal_planes(&polygon1);
-        let projected_polygons: Vec<Polygon> = projection_planes
+        let projected_polygons1: Vec<Polygon> = projection_planes
             .iter()
             .map(|plane| project_mesh_onto_plane(plane, &self_polygons))
             .collect();
+        let projected_polygons2: Vec<Polygon> = projection_planes
+            .iter()
+            .map(|plane| project_mesh_onto_plane(plane, &other_polygons))
+            .collect();
 
         // Perform the separating axis theorem for each polygon
-        for polygon2 in projected_polygons.iter() {
-            if !separating_axis_theorem(&polygon1, polygon2) {
+        for (projected_polygon1, projected_polygon2) in projected_polygons1.iter().zip(projected_polygons2.iter()) {
+            if !separating_axis_theorem(&projected_polygon1, &projected_polygon2) {
                 return false;
             }
         }

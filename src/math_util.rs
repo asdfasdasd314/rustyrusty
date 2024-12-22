@@ -1,7 +1,9 @@
-use std::convert;
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 
 use crate::heap::custom_heap::*;
 use crate::{convert_polygon_to_plane, render::Polygon};
+
 use raylib::prelude::*;
 
 pub const fn cross_product(v1: &Vector3, v2: &Vector3) -> Vector3 {
@@ -49,11 +51,12 @@ pub struct SphericalAngle {
 }
 
 impl SphericalAngle {
-    pub fn new(theta: f32, phi: f32) -> SphericalAngle {
+    pub const fn new(theta: f32, phi: f32) -> SphericalAngle {
         SphericalAngle { theta, phi }
     }
 }
 
+#[derive(Debug)]
 pub struct Plane {
     // These are the variables necessary to define a plane in 3 space
     // ax + by + cz = d
@@ -67,6 +70,22 @@ pub struct Plane {
 }
 
 impl Plane {
+    // A plane can also be uniquely defined by three points
+    pub fn from_three_points(points: (&Vector3, &Vector3, &Vector3)) -> Self {
+        let u = *points.2 - *points.0;
+        let v = *points.1 - *points.0;
+
+        let normal = cross_product(&u, &v);
+
+        Self {
+            a: normal.x,
+            b: normal.y,
+            c: normal.z,
+            d: normal.x * points.0.x + normal.y * points.0.y + normal.z * points.0.z,
+            p0: *points.0,
+        }
+    }
+
     // A plane can be uniquely defined with a normal vector and a point
     pub fn from_point_and_normal(p0: Vector3, v: Vector3) -> Self {
         let d = p0.x * v.x + p0.y * v.y + p0.z * v.z;
@@ -80,6 +99,7 @@ impl Plane {
     }
 }
 
+#[derive(Debug)]
 pub struct Line3D {
     // These are the variables necessary to define the parametric equations of a line in 3 space
     // x: x0 + at
@@ -107,10 +127,14 @@ pub fn project_point_onto_plane(point: &Vector3, plane: &Plane) -> Vector3 {
     let normal_magnitude = calculate_magnitude_3d(&normal_vec);
     let d_magnitude = calculate_magnitude_3d(&d_vec);
 
+    if d_magnitude == 0.0 {
+        return *point;
+    }
+
     // theta is in radians
     let theta = (dot_product_3d(&normal_vec, &d_vec) / (normal_magnitude * d_magnitude)).acos();
 
-    let height = d_magnitude * (90.0 - theta.to_degrees());
+    let height = d_magnitude * (90.0 - theta.to_degrees()).to_radians().sin();
     let height_vec = normal_vec * (height / normal_magnitude);
 
     return *point - height_vec;
@@ -157,12 +181,131 @@ impl ComparisonAxis {
     }
 }
 
-fn graham_scan(projected_points: &[Vector2]) -> Vec<usize> {
-    todo!()
+fn is_counter_clockwise(point1: &Vector2, point2: &Vector2, point3: &Vector2) -> bool {
+    return (point2.x - point1.x) * (point3.y - point1.y)
+        - (point2.y - point1.y) * (point3.x - point1.x)
+        > 0.0;
 }
 
-fn project_points_to_2d(points: &[Vector3]) -> Vec<Vector2> {
-    todo!()
+/**
+An implementation of Graham's scan that defines the convex polygon from a set of points in O(n) time
+The reason the overall algorithm is nlogn is because the sorting takes nlogn
+Yes I understand I'm working with a limited number of points, and often the data is nearly sorted so heapsort
+and this worrying about time complexity is wrong, but I am doing this project TO LEARN, so it doesn't matter
+ */
+fn graham_scan(projected_points: &[Vector2]) -> Vec<Vector2> {
+    let mut stack: Vec<Vector2> = Vec::new();
+
+    for point in projected_points {
+        // The check for the length greater than 1 is done so it's possible to verify the angle
+        while stack.len() > 1
+            && !is_counter_clockwise(&stack[stack.len() - 2], &stack[stack.len() - 1], &point)
+        {
+            stack.pop();
+        }
+
+        stack.push(*point);
+    }
+
+    return stack;
+}
+
+// Planes that can be described by a single basis vector
+#[derive(Debug)]
+pub enum BasePlane {
+    XZ,
+    YZ,
+    XY,
+}
+
+pub fn calculate_base_plane(plane: &Plane) -> BasePlane {
+    // We don't actually need j hat
+    let i = Vector3::new(1.0, 0.0, 0.0);
+    //let j = Vector3::new(0.0, 1.0, 0.0,);
+    let k = Vector3::new(0.0, 0.0, 1.0);
+
+    let plane_normal = Vector3::new(plane.a, plane.b, plane.c);
+    // If the dot of the normal and the unit vector that defines the base plane is not the normal, then it's not parallel
+    // i -> yz plane, j -> xz, k -> xy
+
+    let magnitude_normal = calculate_magnitude_3d(&plane_normal);
+    if dot_product_3d(&plane_normal, &k).abs() == magnitude_normal {
+        return BasePlane::XY;
+    } else if dot_product_3d(&plane_normal, &i).abs() == magnitude_normal {
+        return BasePlane::YZ;
+    } else {
+        return BasePlane::XZ;
+    }
+}
+
+pub fn project_into_2d(points: &[Vector3], base_plane: &BasePlane) -> Vec<Vector2> {
+    match base_plane {
+        BasePlane::XY => {
+            // We map onto the x y plane, so remove the z coordinate
+            points
+                .iter()
+                .map(|point| Vector2::new(point.x, point.y))
+                .collect()
+        }
+        BasePlane::XZ => {
+            // We map onto the x z plane, so remove the y coordinate
+            points
+                .iter()
+                .map(|point| Vector2::new(point.x, point.z))
+                .collect()
+        }
+        BasePlane::YZ => {
+            // We map onto the y z plane, so remove the x coordinate
+            points
+                .iter()
+                .map(|point| Vector2::new(point.y, point.z))
+                .collect()
+        }
+    }
+}
+
+/**
+Takes the three initial points that can be used to define the points, the actual points that were mapped to 2D, and the plane that all the points were mapped onto to calculate the positions of the points in 3-space
+ */
+pub fn project_into_3d(plane: &Plane, points: &[Vector2], base_plane: &BasePlane) -> Vec<Vector3> {
+    // In two of the cases they are vertical planes, so account for those
+    // XZ is the only plane we calculate the points for because it's also the default
+    match base_plane {
+        BasePlane::XZ => {
+            // Find the y coordinate
+            points
+                .iter()
+                .map(|point2d| {
+                    let y = (plane.d - point2d.x * plane.a - point2d.y * plane.c) / plane.b;
+                    Vector3::new(point2d.x, y, point2d.y)
+                })
+                .collect()
+        }
+
+        // In this case calculate the z and put it at the end using the fact that only the z coordinate matters in the equation of the plane
+        BasePlane::XY => {
+            // Find the z coordinate
+            points
+                .iter()
+                .map(|point2d| {
+                    let z = plane.d / plane.c;
+                    Vector3::new(point2d.x, point2d.y, z)
+                })
+                .collect()
+        }
+
+        // In this case calculate the x and put it at the end using the fact that only the x coordinate matters in the equation of the plane
+        BasePlane::YZ => {
+            // Find the x coordinate
+            points
+                .iter()
+                .map(|point2d| {
+                    let x = plane.d / plane.a;
+                    Vector3::new(x, point2d.x, point2d.y)
+                })
+                .collect()
+        }
+    }
 }
 
 pub fn project_mesh_onto_plane(plane: &Plane, mesh_polygons: &[Polygon]) -> Polygon {
@@ -176,7 +319,21 @@ pub fn project_mesh_onto_plane(plane: &Plane, mesh_polygons: &[Polygon]) -> Poly
     }
 
     // Convert the points to 2D
-    let mut two_dimensional_points = project_points_to_2d(&projected_points);
+    let base_plane = calculate_base_plane(plane);
+    let mut two_dimensional_points = project_into_2d(&projected_points, &base_plane);
+
+    // Really quickly remove duplicates because there's a very high chance of those existing
+    // We have a small number of points, so just O(n^2) search
+
+    //for i in (0..two_dimensional_points.len()).rev() {
+    //    let point = two_dimensional_points[i];
+    //    for j in 0..i {
+    //        if point.x == two_dimensional_points[j].x && point.y == two_dimensional_points[j].y {
+    //            two_dimensional_points.remove(i);
+    //            break;
+    //        }
+    //    }
+    //}
 
     // Get the axis for which all points will be compared to
     let comparison_axis = ComparisonAxis::new(&two_dimensional_points);
@@ -186,58 +343,40 @@ pub fn project_mesh_onto_plane(plane: &Plane, mesh_polygons: &[Polygon]) -> Poly
     // Sort based on the root pointt
     heapsort(&comparison_axis, &mut two_dimensional_points);
 
-    let bounding_indices = graham_scan(&two_dimensional_points);
+    // I implemented graham's scan in such a way that sometimes the root isn't included
+    let mut bounding_points = graham_scan(&two_dimensional_points);
 
-    let mut polygon_points: Vec<Vector3> = Vec::with_capacity(bounding_indices.len());
-    for index in bounding_indices {
-        polygon_points.push(projected_points[index]);
+    // It doesn't matter what order they are in the end at this point
+    if bounding_points[0] != comparison_axis.p1 {
+        bounding_points.push(comparison_axis.p1);
     }
 
-    return Polygon::new(polygon_points);
+    return Polygon::new(project_into_3d(plane, &bounding_points, &base_plane));
 }
 
 pub fn project_polygon_onto_line(line: &Line3D, polygon: &Polygon) -> (Vector3, Vector3) {
-    let points = polygon.points.clone();
-    // Two pointers  search for the furthest two points on the line when projected
-    let mut left = 0;
-    let mut right = points.len() - 1;
+    let line_dir = line.v.normalized();
+    
+    let mut t_min = f32::INFINITY;
+    let mut t_max = f32::NEG_INFINITY;
+    
+    for point in &polygon.points {
+        let vec_to_point = *point - line.p0;
 
-    let mut max_distance: f32 = calculate_magnitude_3d(
-        &(project_point_onto_line(line, points[right])
-            - project_point_onto_line(line, points[left])),
-    );
+        let t = vec_to_point.dot(line_dir);
 
-    // Move the left pointer to the right and go until the distance is less
-    while left < right {
-        let curr_distance = calculate_magnitude_3d(
-            &(project_point_onto_line(line, points[right])
-                - project_point_onto_line(line, points[left])),
-        );
-        if curr_distance > max_distance {
-            max_distance = curr_distance;
-            left += 1;
-        } else {
-            // This is a necessary step, because it's not getting any better on the left side
-            right -= 1;
-            break;
+        if t < t_min {
+            t_min = t;
+        }
+        if t > t_max {
+            t_max = t;
         }
     }
 
-    // Move the right pointer to the left and go until the distance is less
-    while left < right {
-        let curr_distance = calculate_magnitude_3d(
-            &(project_point_onto_line(line, points[right])
-                - project_point_onto_line(line, points[left])),
-        );
-        if curr_distance > max_distance {
-            max_distance = curr_distance;
-            right -= 1;
-        } else {
-            break;
-        }
-    }
+    let start_point = line.p0 + line_dir * t_min;
+    let end_point = line.p0+  line_dir * t_max;
 
-    return (points[left], points[right]);
+    (start_point, end_point)
 }
 
 /**
@@ -247,21 +386,7 @@ fn project_point_onto_line(line: &Line3D, point: Vector3) -> Vector3 {
     let v = line.v;
     let u = point - line.p0;
     // u_initial + projv(u) = projected point
-    return point + v * (dot_product_3d(&v, &u) / dot_product_3d(&v, &v));
-}
-
-/**
-Calculates the line orthogonal to the line segment relative to a coplanar point
-I'll just note that technically this is completely unnecessary any of the infinite orthogonal lines will do, but I think geometrically this is just more accurate
- */
-pub fn calculate_orthogonal_line(
-    line_segment: &(Vector3, Vector3),
-    third_point: &Vector3,
-) -> Line3D {
-    let parallel_line =
-        Line3D::from_point_and_parallel_vec(*third_point, line_segment.1 - line_segment.0);
-    let q = project_point_onto_line(&parallel_line, line_segment.1);
-    return Line3D::from_point_and_parallel_vec(line_segment.1, q - line_segment.1);
+    return line.p0 + v * (dot_product_3d(&v, &u) / dot_product_3d(&v, &v));
 }
 
 /**
@@ -287,10 +412,63 @@ pub fn line_segments_overlap(
     line_segment1: (Vector3, Vector3),
     line_segment2: (Vector3, Vector3),
 ) -> bool {
-    let line_segment1_magnitude = calculate_magnitude_3d(&(line_segment1.1 - line_segment1.0));
-    let distance1 = calculate_magnitude_3d(&(line_segment1.1 - line_segment2.0));
-    let distance2 = calculate_magnitude_3d(&(line_segment1.1 - line_segment2.1));
-    return distance1 < line_segment1_magnitude || distance2 < line_segment1_magnitude;
+    let a1 = line_segment1.0;
+    let b1 = line_segment1.1;
+    let a2 = line_segment2.0;
+    let b2 = line_segment2.1;
+
+    // Direction vector of segment 1
+    let v1 = b1 - a1;
+
+    // Check if Segment 2 is a degenerate point
+    if a2 == b2 {
+        // Segment 2 is a point: Check if this point lies on Segment 1
+        let v_point = a2 - a1;
+        let is_collinear = v1.cross(v_point).length() == 0.0;
+
+        if is_collinear {
+            // Check if the point lies within Segment 1's bounds
+            let dot_product = v_point.dot(v1);
+            let is_within_bounds = dot_product >= 0.0 && dot_product <= v1.dot(v1);
+            return is_within_bounds;
+        }
+        return false;
+    }
+
+    // Check if Segment 1 is a degenerate point
+    if a1 == b1 {
+        // Segment 1 is a point: Check if this point lies on Segment 2
+        let v_point = a1 - a2;
+        let v2 = b2 - a2;
+        let is_collinear = v2.cross(v_point).length() == 0.0;
+
+        if is_collinear {
+            // Check if the point lies within Segment 2's bounds
+            let dot_product = v_point.dot(v2);
+            let is_within_bounds = dot_product >= 0.0 && dot_product <= v2.dot(v2);
+            return is_within_bounds;
+        }
+        return false;
+    }
+
+    // General case: Both are actual segments
+    let v2 = a2 - a1;
+    let v3 = b2 - a1;
+
+    // Check collinearity
+    if v1.cross(v2).length() != 0.0 || v1.cross(v3).length() != 0.0 {
+        return false; // Not collinear
+    }
+
+    // Parametrize A2 and B2 on Segment 1's line
+    let t1 = (a2 - a1).dot(v1) / v1.dot(v1);
+    let t2 = (b2 - a1).dot(v1) / v1.dot(v1);
+    
+    // Check if intervals overlap
+    let t_min = t1.min(t2);
+    let t_max = t1.max(t2);
+
+    t_max >= 0.0 && t_min <= 1.0
 }
 
 pub fn check_planes_intersect(plane1: &Plane, plane2: &Plane) -> bool {
@@ -459,4 +637,36 @@ pub fn check_angles_surround_relative_origin(angles: Vec<SphericalAngle>) -> boo
     }
 
     return false;
+}
+
+#[cfg(test)]
+mod tests {
+    use proptest::prelude::*;
+    use proptest::test_runner::TestRunner;
+    use proptest::strategy::{Strategy, ValueTree};
+    use super::*;
+
+    fn point_strategy() -> impl Strategy<Value = Vector3> {
+        let x = (-1000.0..1000.0_f32).prop_map(|x| x);
+        let y = (-1000.0..1000.0_f32).prop_map(|y| y);
+        let z = (-1000.0..1000.0_f32).prop_map(|z| z);
+        (x, y, z).prop_map(|(x, y, z)| Vector3::new(x, y, z))
+    }
+
+    fn plane_strategy() -> impl Strategy<Value = Plane> {
+        // Generate a random value for the point, yeah I could just generate a random value manually, but I'm using the features of proptest!
+        let mut runner = TestRunner::default();
+        let point_strategy = point_strategy();
+        let point: Vector3 = point_strategy.new_tree(&mut runner).unwrap().current();
+        ((-1000.0..1000.0_f32), (-1000.0..1000.0_f32), (-1000.0..1000.0_f32)).prop_filter("A plane can't have the zero vector as the normal", |(a, b, c)| {
+            *a != 0.0 || *b != 0.0 || *c != 0.0
+        }).prop_map(move |(a, b, c)| {
+            Plane::from_point_and_normal(point, Vector3::new(a, b, c))
+        })
+    }
+
+    /*
+    Proptested functions:
+        - project_point_onto_plane
+    */
 }

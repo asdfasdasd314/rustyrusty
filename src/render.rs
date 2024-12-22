@@ -2,7 +2,7 @@ use crate::math_util::*;
 use raylib::prelude::*;
 use std::fmt::Debug;
 
-// This is only really a useful abstraction for rendering or calculating collisions
+// This is only really a useful abstraction for rendering or calculating collisions #[derive(Debug)]
 #[derive(Debug)]
 pub struct Polygon {
     // These points are absolute
@@ -10,9 +10,10 @@ pub struct Polygon {
 }
 
 impl Polygon {
-    pub fn new(mut points: Vec<Vector3>) -> Self {
-        // Ensure the points are stored in a cyclical order (sorted)
-        sort_points_by_angle_from_centroid(&mut points);
+    /**
+    Points have to be sorted being passed to the polygon constructor
+     */
+    pub fn new(points: Vec<Vector3>) -> Self {
         Polygon { points }
     }
 
@@ -112,12 +113,12 @@ impl MeshShape for RectangularPrism {
 
         // Define all of the polygons
         vec![
-            Polygon::new(vec![vertices[0], vertices[1], vertices[2], vertices[3]]),
-            Polygon::new(vec![vertices[4], vertices[5], vertices[6], vertices[7]]),
-            Polygon::new(vec![vertices[0], vertices[1], vertices[4], vertices[5]]),
-            Polygon::new(vec![vertices[2], vertices[3], vertices[6], vertices[7]]),
-            Polygon::new(vec![vertices[0], vertices[2], vertices[4], vertices[6]]),
-            Polygon::new(vec![vertices[1], vertices[3], vertices[5], vertices[7]]),
+            Polygon::new(vec![vertices[0], vertices[1], vertices[3], vertices[2]]),
+            Polygon::new(vec![vertices[4], vertices[5], vertices[7], vertices[6]]),
+            Polygon::new(vec![vertices[0], vertices[1], vertices[5], vertices[4]]),
+            Polygon::new(vec![vertices[2], vertices[3], vertices[7], vertices[6]]),
+            Polygon::new(vec![vertices[0], vertices[2], vertices[6], vertices[4]]),
+            Polygon::new(vec![vertices[1], vertices[3], vertices[7], vertices[5]]),
         ]
     }
 
@@ -134,23 +135,23 @@ impl MeshShape for RectangularPrism {
             Color::PURPLE,
         ];
         for polygon in polygons {
-            let mut polygon_points = polygon.points;
-            sort_points_by_angle_from_centroid(&mut polygon_points);
+            let polygon_points = polygon.points;
 
-            for i in 0..polygon_points.len() - 2 {
+            // TODO: For some reason this works, but I think it shouldn't...
+            for i in 1..polygon_points.len() - 1 {
                 // Draw the front side
                 draw_mode.draw_triangle3D(
+                    polygon_points[0],
                     polygon_points[i],
                     polygon_points[i + 1],
-                    polygon_points[i + 2],
                     colors[color_index],
                 );
 
                 // Draw the back side
                 draw_mode.draw_triangle3D(
-                    polygon_points[i + 2],
                     polygon_points[i + 1],
                     polygon_points[i],
+                    polygon_points[0],
                     colors[color_index],
                 );
             }

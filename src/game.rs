@@ -98,6 +98,9 @@ impl Game {
             if colliding_objects.len() > 0 {
                 println!("Colliding");
             }
+            else {
+                println!("Not colliding");
+            }
         }
     }
 
@@ -109,7 +112,7 @@ impl Game {
 fn find_colliding_objects(objects: &[&RigidBody]) -> Vec<(usize, usize)> {
     let mut colliding_objects: Vec<(usize, usize)> = Vec::new();
     for i in 0..objects.len() - 1 {
-        for j in i..objects.len() {
+        for j in i + 1..objects.len() {
             if rigid_bodies_collide(&objects[i], &objects[j]) {
                 colliding_objects.push((i, j));
             }
