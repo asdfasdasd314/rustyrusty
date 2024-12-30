@@ -32,6 +32,7 @@ impl RigidBody {
         }
     }
 
+    // todo
     pub fn collides_with(&self, other: &RigidBody) -> bool {
         let mut checked_planes: HashSet<HashableVector3> = HashSet::new();
         let self_polygons = self.mesh.get_polygons();
