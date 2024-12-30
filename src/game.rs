@@ -7,7 +7,8 @@ use crate::player::*;
 pub struct Game {
     player: Player,
 
-    physical_objects: Vec<RigidBody>,
+    dynamic_objects: Vec<RigidBody>,
+    static_objects: Vec<RigidBody>,
 
     window_size: (i32, i32),
     window_title: String,
@@ -22,7 +23,8 @@ impl Game {
     // Handles all the setup for a game (window, player, world, etc.)
     pub fn new(
         player: Player,
-        physical_objects: Vec<RigidBody>,
+        dynamic_objects: Vec<RigidBody>,
+        static_objects: Vec<RigidBody>,
         window_size: (i32, i32),
         window_title: String,
     ) -> Game {
@@ -32,7 +34,8 @@ impl Game {
             .build();
         let mut game = Game {
             player,
-            physical_objects,
+            dynamic_objects,
+            static_objects,
             window_size,
             window_title,
             cursor_shown: false,
@@ -70,6 +73,8 @@ impl Game {
             // Do user input and movement
             self.player.update(&self.raylib_handle, delta_time);
 
+            let colliding_objects: Vec<(&RigidBody, &RigidBody)> = self.find_colliding_objects();
+
             // Begin rendering
             let mut draw_handle = self.raylib_handle.begin_drawing(&self.raylib_thread);
 
@@ -79,45 +84,68 @@ impl Game {
             {
                 let mut draw_handle_3d = draw_handle.begin_mode3D(self.player.camera);
 
-                for object in &self.physical_objects {
+                for object in &self.static_objects {
                     object.mesh.render(&mut draw_handle_3d);
+                }
+
+                for object in &self.dynamic_objects {
+                    object.mesh.render(&mut draw_handle_3d);
+                }
+
+                match self.player.camera_type {
+                    CameraType::FirstPerson => {}
+                    CameraType::ThirdPerson(_) => {
+                        self.player.rigid_body.mesh.render(&mut draw_handle_3d);
+                    }
                 }
             }
 
             draw_handle.draw_fps(10, 10);
-
-            let mut all_objects: Vec<&RigidBody> = Vec::new();
-
-            for physical_object in self.physical_objects.iter() {
-                all_objects.push(physical_object);
-            }
-
-            all_objects.push(&self.player.rigid_body);
-
-            let colliding_objects = find_colliding_objects(&all_objects);
-            if colliding_objects.len() > 0 {
-                println!("Colliding");
-            }
-            else {
-                println!("Not colliding");
-            }
         }
     }
 
-    pub fn add_physical_object(&mut self, new_object: RigidBody) {
-        self.physical_objects.push(new_object);
+    pub fn add_dynamic_object(&mut self, new_object: RigidBody) {
+        self.dynamic_objects.push(new_object);
     }
-}
 
-fn find_colliding_objects(objects: &[&RigidBody]) -> Vec<(usize, usize)> {
-    let mut colliding_objects: Vec<(usize, usize)> = Vec::new();
-    for i in 0..objects.len() - 1 {
-        for j in i + 1..objects.len() {
-            if rigid_bodies_collide(&objects[i], &objects[j]) {
-                colliding_objects.push((i, j));
+    pub fn add_static_object(&mut self, new_object: RigidBody) {
+        self.static_objects.push(new_object);
+    }
+
+    fn find_colliding_objects(&self) -> Vec<(&RigidBody, &RigidBody)> {
+        let mut dynamic_objects: Vec<&RigidBody> = Vec::with_capacity(self.dynamic_objects.len() + 1);
+        dynamic_objects.push(&self.player.rigid_body);
+        for object in self.dynamic_objects.iter() {
+            dynamic_objects.push(object);
+        }
+
+        let mut colliding_objects: Vec<(&RigidBody, &RigidBody)> = Vec::new();
+        for i in 0..dynamic_objects.len() {
+            let dynamic_object1 = dynamic_objects[i];
+            let radius1 = dynamic_object1.get_bounding_circle_radius();
+            for static_object in self.static_objects.iter() {
+                let distance_between_centers = (dynamic_object1.get_center() - static_object.get_center()).length();
+                if radius1 + static_object.get_bounding_circle_radius() < distance_between_centers {
+                    continue;
+                }
+
+                if dynamic_object1.collides_with(static_object) {
+                    colliding_objects.push((dynamic_object1, static_object));
+                }
+            }
+
+            for j in i + 1..dynamic_objects.len() {
+                let dynamic_object2 = dynamic_objects[j];
+                let distance_between_centers = (dynamic_object1.get_center() - dynamic_object2.get_center()).length();
+                if radius1 + dynamic_object2.get_bounding_circle_radius() < distance_between_centers {
+                    continue;
+                }
+                if dynamic_object1.collides_with(dynamic_object2) {
+                    colliding_objects.push((dynamic_object1, dynamic_object2));
+                }
             }
         }
-    }
 
-    colliding_objects
+        colliding_objects
+    }
 }

@@ -2,8 +2,8 @@ use crate::math_util::*;
 use raylib::prelude::*;
 
 fn calculate_cos_of_angle(vec1: &Vector2, vec2: &Vector2) -> f32 {
-    return dot_product_2d(vec1, vec2)
-        / (calculate_magnitude_2d(vec1) * calculate_magnitude_2d(vec2));
+    return vec1.dot(*vec2)
+        / (vec1.length() * vec2.length());
 }
 
 /**
@@ -29,8 +29,8 @@ fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Vector
     }
     else {
         // Otherwise compare the distance to the point
-        let distance1 = calculate_magnitude_2d(&vec1);
-        let distance2 = calculate_magnitude_2d(&vec2);
+        let distance1 = vec1.length();
+        let distance2 = vec2.length();
 
         return distance1 > distance2;
     }
