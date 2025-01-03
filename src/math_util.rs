@@ -1,11 +1,18 @@
-use std::cmp;
 use crate::heap::custom_heap::*;
 use crate::render::{MeshShape, Polygon};
+use std::cmp;
 
 use raylib::prelude::*;
 
 pub const fn f32_min(a: f32, b: f32) -> f32 {
     if a < b {
+        return a;
+    }
+    return b;
+}
+
+pub const fn f32_max(a: f32, b: f32) -> f32 {
+    if a > b {
         return a;
     }
     return b;
@@ -66,11 +73,7 @@ impl Plane {
     // A plane can be uniquely defined with a normal vector and a point
     pub fn from_point_and_normal(p0: Vector3, v: Vector3) -> Self {
         let d = p0.x * v.x + p0.y * v.y + p0.z * v.z;
-        Self {
-            n: v,
-            d,
-            p0,
-        }
+        Self { n: v, d, p0 }
     }
 
     /**
@@ -166,14 +169,18 @@ impl Plane {
         let line2: Line2D;
 
         if self.n.x == 0.0 {
-            line1 = Line2D::from_two_points(Vector2::new(0.0, self.n.y), Vector2::new(1.0, self.n.y));
+            line1 =
+                Line2D::from_two_points(Vector2::new(0.0, self.n.y), Vector2::new(1.0, self.n.y));
         } else {
-            line1 = Line2D::from_two_points(Vector2::new(0.0, self.n.y), Vector2::new(self.n.x, 0.0));
+            line1 =
+                Line2D::from_two_points(Vector2::new(0.0, self.n.y), Vector2::new(self.n.x, 0.0));
         }
         if other.n.x == 0.0 {
-            line2 = Line2D::from_two_points(Vector2::new(0.0, other.n.y), Vector2::new(1.0, other.n.y));
+            line2 =
+                Line2D::from_two_points(Vector2::new(0.0, other.n.y), Vector2::new(1.0, other.n.y));
         } else {
-            line2 = Line2D::from_two_points(Vector2::new(0.0, other.n.y), Vector2::new(other.n.x, 0.0));
+            line2 =
+                Line2D::from_two_points(Vector2::new(0.0, other.n.y), Vector2::new(other.n.x, 0.0));
         }
 
         let line_intersection = line1.find_intersection(&line2);
@@ -196,7 +203,7 @@ impl Plane {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Line3D {
     // These are the variables necessary to define the parametric equations of a line in 3 space
     // x: x0 + at
@@ -213,7 +220,32 @@ impl Line3D {
 
     pub fn from_line_segment(line_segment: (Vector3, Vector3)) -> Self {
         let vec = line_segment.1 - line_segment.0;
-        return Line3D::from_point_and_parallel_vec(line_segment.1, vec);
+        Line3D::from_point_and_parallel_vec(line_segment.0, vec)
+    }
+
+    /**
+     * Finds the value of t such the equations for the point of the line are satasfied for the given point
+     */
+    pub fn find_t_from_point(&self, point: Vector3) -> f32 {
+        let direction_vec = point - self.p0;
+        if self.v.x == 0.0 && self.v.y == 0.0 {
+            direction_vec.z / self.v.z
+        } else if self.v.x == 0.0 && self.v.z == 0.0 {
+            direction_vec.y / self.v.y
+        } else {
+            direction_vec.x / self.v.x
+        }
+    }
+
+    /**
+     * Finds the point for the given t
+     */
+    pub fn find_point_from_t(&self, t: f32) -> Vector3 {
+        Vector3::new(
+            self.p0.x + self.v.x * t,
+            self.p0.y + self.v.y * t,
+            self.p0.z + self.v.z * t,
+        )
     }
 
     pub fn project_polygon_onto_line(&self, polygon: &Polygon) -> (Vector3, Vector3) {
@@ -276,9 +308,8 @@ impl Line2D {
 
             // If this is true then the projection did nothing, meaning that the lines are overlapping
             if projected_tail == self.p0 + self.v {
-                return LineIntersection::Infinite; 
-            }
-            else {
+                return LineIntersection::Infinite;
+            } else {
                 return LineIntersection::None;
             }
         }
@@ -289,8 +320,7 @@ impl Line2D {
             // If the lines are parallel project onto self.v
             let proj_other_to_self = self.project_point(other.v);
             t = proj_other_to_self.length() / self.v.length();
-        }
-        else {
+        } else {
             // It's theoretically possible we go past the point, so pick two points equidistant away and choose the direction that gets closer
             let point1 = self.p0 + self.v;
             let point2 = self.p0 - self.v;
@@ -362,9 +392,9 @@ and this worrying about time complexity is wrong, but I am doing this project TO
  */
 fn graham_scan(projected_points: &[Vector2]) -> Vec<Vector2> {
     fn is_counter_clockwise(point1: &Vector2, point2: &Vector2, point3: &Vector2) -> bool {
-        return (point2.x - point1.x) * (point3.y - point1.y)
+        (point2.x - point1.x) * (point3.y - point1.y)
             - (point2.y - point1.y) * (point3.x - point1.x)
-            > 0.0;
+            > 0.0
     }
 
     let mut stack: Vec<Vector2> = Vec::new();
@@ -372,7 +402,7 @@ fn graham_scan(projected_points: &[Vector2]) -> Vec<Vector2> {
     for point in projected_points {
         // The check for the length greater than 1 is done so it's possible to verify the angle
         while stack.len() > 1
-            && !is_counter_clockwise(&stack[stack.len() - 2], &stack[stack.len() - 1], &point)
+            && !is_counter_clockwise(&stack[stack.len() - 2], &stack[stack.len() - 1], point)
         {
             stack.pop();
         }
@@ -380,7 +410,7 @@ fn graham_scan(projected_points: &[Vector2]) -> Vec<Vector2> {
         stack.push(*point);
     }
 
-    return stack;
+    stack
 }
 
 // Planes that can be described by a single basis vector
@@ -498,68 +528,45 @@ impl TwoDimensionalPointProjector {
 
 /**
 The two line segments passed in should be colinear
+Calculates the amount of overlap between two line segments (returns `None` if they don't overlap)
  */
 pub fn line_segments_overlap(
     line_segment1: (Vector3, Vector3),
     line_segment2: (Vector3, Vector3),
-) -> bool {
-    let a1 = line_segment1.0;
-    let b1 = line_segment1.1;
-    let a2 = line_segment2.0;
-    let b2 = line_segment2.1;
+) -> Option<f32> {
+    let base_line: Line3D;
+    let other_segment: &(Vector3, Vector3);
+    // Check if line segment1 is just a point
+    if line_segment1.0 == line_segment1.1 {
+        // Turn line segment 2 into a line because line segment1 is a point
+        base_line = Line3D::from_line_segment(line_segment2);
+        other_segment = &line_segment1;
+    } else {
+        base_line = Line3D::from_line_segment(line_segment1);
+        other_segment = &line_segment2;
+    }
 
-    // Direction vector of segment 1
-    let v1 = b1 - a1;
-
-    // Check if Segment 2 is a degenerate point
-    if a2 == b2 {
-        // Segment 2 is a point: Check if this point lies on Segment 1
-        let v_point = a2 - a1;
-        let is_collinear = v1.cross(v_point).length() == 0.0;
-
-        if is_collinear {
-            // Check if the point lies within Segment 1's bounds
-            let dot_product = v_point.dot(v1);
-            let is_within_bounds = dot_product >= 0.0 && dot_product <= v1.dot(v1);
-            return is_within_bounds;
+    let t1 = base_line.find_t_from_point(other_segment.0);
+    let t2 = base_line.find_t_from_point(other_segment.1);
+    if t1 < 0.0 && t2 < 0.0 {
+        return None;
+    }
+    if t1 < t2 {
+        if t1 < 0.0 {
+            return Some((f32_min(t2, 1.0)) * base_line.v.length());
         }
-        return false;
-    }
-
-    // Check if Segment 1 is a degenerate point
-    if a1 == b1 {
-        // Segment 1 is a point: Check if this point lies on Segment 2
-        let v_point = a1 - a2;
-        let v2 = b2 - a2;
-        let is_collinear = v2.cross(v_point).length() == 0.0;
-
-        if is_collinear {
-            // Check if the point lies within Segment 2's bounds
-            let dot_product = v_point.dot(v2);
-            let is_within_bounds = dot_product >= 0.0 && dot_product <= v2.dot(v2);
-            return is_within_bounds;
+        else {
+            return Some((f32_min(t2, 1.0) - f32_min(t1, 1.0)) * base_line.v.length());
         }
-        return false;
     }
-
-    // General case: Both are actual segments
-    let v2 = a2 - a1;
-    let v3 = b2 - a1;
-
-    // Check collinearity
-    if v1.cross(v2).length() != 0.0 || v1.cross(v3).length() != 0.0 {
-        return false; // Not collinear
+    else {
+        if t2 < 0.0 {
+            return Some((f32_min(t1, 1.0)) * base_line.v.length());
+        }
+        else {
+            return Some((f32_min(t1, 1.0) - f32_min(t2, 1.0)) * base_line.v.length());
+        }
     }
-
-    // Parametrize A2 and B2 on Segment 1's line
-    let t1 = (a2 - a1).dot(v1) / v1.dot(v1);
-    let t2 = (b2 - a1).dot(v1) / v1.dot(v1);
-
-    // Check if intervals overlap
-    let t_min = t1.min(t2);
-    let t_max = t1.max(t2);
-
-    t_max >= 0.0 && t_min <= 1.0
 }
 
 // Calculates the difference in between the angles of the vectors using the base_vec as the base

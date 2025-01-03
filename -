@@ -220,7 +220,7 @@ impl Game {
             println!("{:#?}", collision.2);
             match collision.0 {
                 CollisionObject1::Player => {
-                    self.player.move_by(collision.2);
+                    self.player.move_by(collision.2 * 100.0);
                 }
                 CollisionObject1::Dynamic(index) => {
                     self.dynamic_objects[index].move_by(collision.2);

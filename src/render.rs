@@ -1,5 +1,7 @@
 use crate::math_util::*;
 use raylib::prelude::*;
+use std::cmp::min_by_key;
+use std::collections::HashSet;
 use std::fmt::Debug;
 
 // This is only really a useful abstraction for rendering or calculating collisions #[derive(Debug)]
@@ -22,11 +24,22 @@ impl Polygon {
         for i in 0..self.points.len() {
             edges.push((self.points[i], self.points[(i + 1) % self.points.len()]));
         }
-        return edges;
+        edges
     }
 
     /**
-    Calculates the orthogonal planes necessary for the separating axis theorem
+    Calculates a single possible orthogonal plane that can be used for the separating axis theorem (this is much more optimal, but I'm not quite sure if it's actually correct for anything other than cubes)
+     */
+    pub fn calculate_orthogonal_plane(&self) -> Plane {
+        let polygon_as_plane = self.convert_to_plane();
+        let edges = self.get_edges();
+        let edge_vec = edges[0].1 - edges[0].0;
+        let new_normal = polygon_as_plane.n.cross(edge_vec);
+        return Plane::from_point_and_normal(edges[0].0, new_normal);
+    }
+
+    /**
+    Calculates any of the orthogonal planes necessary for the separating axis theorem
     Some of these planes could be the same as ones already checked, so this isn't quite optimal
      */
     pub fn calculate_orthogonal_planes(&self) -> Vec<Plane> {
@@ -60,38 +73,63 @@ impl Polygon {
         Plane::from_point_and_normal(*p0, cross)
     }
 
-    pub fn collides_with(&self, other: &Polygon) -> bool {
-        for i in 0..self.points.len() {
-            let line_segment = self.get_edges()[i];
-            let third_point = self.get_edges()[(i + 1) % self.points.len()].1; // Borrow another point so we can calculate the normal vector to the line
+    // While it isn't precise for extremely fast objects, this basically computes the closest way we could move the object to remove the overlap, and considering this is written in Rust I think this is okay
+    /**
+    Returns `None` if the shapes don't overlap
+    Otherwise returns the minimum overlap between shapes and the axis on which that minimum overlap was found
+    */
+    fn separating_axis_theorem(
+        &self,
+        root_polygon: &Polygon,
+        other_polygon: &Polygon,
+    ) -> Option<(f32, Vector3)> {
+        let mut overlap = f32::MAX;
+        let mut axis: Option<Vector3> = None;
+        for i in 0..root_polygon.points.len() {
+            let line_segment = root_polygon.get_edges()[i];
+            let third_point = root_polygon.get_edges()[(i + 1) % root_polygon.points.len()].1; // Borrow another point so we can calculate the normal vector to the line
             let u = line_segment.1 - line_segment.0;
             let v = third_point - line_segment.0;
             let polygon_normal = u.cross(v);
             let normal = u.cross(polygon_normal);
             let projection_line = Line3D::from_point_and_parallel_vec(line_segment.0, normal);
-            let line_segment1 = projection_line.project_polygon_onto_line(self);
-            let line_segment2 = projection_line.project_polygon_onto_line(other);
-            if !line_segments_overlap(line_segment1, line_segment2) {
-                return false;
+            let line_segment1 = projection_line.project_polygon_onto_line(root_polygon);
+            let line_segment2 = projection_line.project_polygon_onto_line(other_polygon);
+            let o = line_segments_overlap(line_segment1, line_segment2);
+            match o {
+                Some(o) => {
+                    if o < overlap {
+                        overlap = o;
+                        axis = Some(projection_line.v);
+                    }
+                }
+                None => return None,
             }
         }
 
-        for i in 0..other.points.len() {
-            let line_segment = other.get_edges()[i];
-            let third_point = other.get_edges()[(i + 1) % self.points.len()].1;
-            let u = line_segment.1 - line_segment.0;
-            let v = third_point - line_segment.0;
-            let polygon_normal = u.cross(v);
-            let normal = u.cross(polygon_normal);
-            let projection_line = Line3D::from_point_and_parallel_vec(line_segment.0, normal);
-            let line_segment1 = projection_line.project_polygon_onto_line(self);
-            let line_segment2 = projection_line.project_polygon_onto_line(other);
-            if !line_segments_overlap(line_segment1, line_segment2) {
-                return false;
-            }
+        return Some((overlap, axis.unwrap()));
+    }
+
+    pub fn collides_with(&self, other: &Polygon) -> Option<(f32, Vector3)> {
+        let mut min_axis: (f32, Vector3);
+
+        let sat1 = self.separating_axis_theorem(self, other);
+        match &sat1 {
+            Some(axis) => min_axis = axis.clone(),
+            None => return None,
         }
 
-        return true;
+        let sat2 = self.separating_axis_theorem(other, self);
+        match sat2 {
+            Some(axis) => {
+                if axis.0 < min_axis.0 {
+                    min_axis = axis;
+                }
+            }
+            None => return None,
+        }
+
+        return Some(min_axis);
     }
 }
 

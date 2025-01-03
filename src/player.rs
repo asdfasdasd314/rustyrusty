@@ -17,14 +17,13 @@ pub struct Player {
     pub pitch: f32,
     pub yaw: f32,
 
-    pub rigid_body: RigidBody,
+    pub dynamic_body: DynamicBody,
 }
 
 impl Dynamic for Player {
     fn move_by(&mut self, change: Vector3) {
         self.absolute_position += change;
-        self.rigid_body.move_by(change);
-        self.camera.position = self.rigid_body.get_center();
+        self.dynamic_body.move_by(change);
     }
 }
 
@@ -34,7 +33,7 @@ impl Player {
         movement_speed: f32,
         camera_sensitivity: f32,
         camera_type: CameraType,
-        rigid_body: RigidBody,
+        dynamic_body: DynamicBody,
     ) -> Self {
         Player {
             absolute_position: init_position,
@@ -49,7 +48,7 @@ impl Player {
             camera_sensitivity,
             pitch: 0.0,
             yaw: 89.0,
-            rigid_body,
+            dynamic_body,
         }
     }
 
@@ -106,9 +105,9 @@ impl Player {
             }
             CameraType::ThirdPerson(distance) => {
                 // Given the direcction, the camera should be on the opposite side of the sphere from the camera direction
-                let target_position = self.rigid_body.get_center() + direction.normalized() * (-1.0 * distance);
+                let target_position = self.dynamic_body.get_center() + direction.normalized() * (-1.0 * distance);
                 self.camera.position = self.camera.position.lerp(target_position, 1.0); // Adjust the factor (0.1) for smoothness
-                self.camera.target = self.rigid_body.get_center();
+                self.camera.target = self.dynamic_body.get_center();
             }
         }
     }
