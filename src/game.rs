@@ -20,10 +20,7 @@ pub struct Game {
     dynamic_objects: Vec<DynamicBody>,
     static_objects: Vec<StaticBody>,
 
-    window_size: (i32, i32),
-    window_title: String,
     cursor_shown: bool,
-    fullscreen: bool,
 
     raylib_handle: RaylibHandle,
     raylib_thread: RaylibThread,
@@ -41,15 +38,13 @@ impl Game {
         let (rl, thread) = raylib::init()
             .size(window_size.0, window_size.1)
             .title(&window_title)
+            .resizable()
             .build();
         let mut game = Game {
             player,
             dynamic_objects,
             static_objects,
-            window_size,
-            window_title,
             cursor_shown: false,
-            fullscreen: false,
             raylib_handle: rl,
             raylib_thread: thread,
         };
@@ -131,82 +126,43 @@ impl Game {
     Third entry is the mtv which is applied to the first object to fix intersections between objects
      */
     fn find_colliding_objects(&self) -> Vec<(CollisionObject1, CollisionObject2, Vector3)> {
-        let mut collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> = Vec::new();
-        // Check player collisions
-        let player_object = &self.player.dynamic_body;
-        let player_radius = player_object.get_bounding_circle_radius();
-        for i in 0..self.dynamic_objects.len() {
-            let dynamic_object = &self.dynamic_objects[i];
-            let distance_between_centers = (player_object.get_center() - dynamic_object.get_center()).length();
-            if player_radius + dynamic_object.get_bounding_circle_radius() < distance_between_centers {
-                continue;
+        fn calculate_mtv(dyn_obj: &DynamicBody, other_obj: Box<&dyn Physical>) -> Option<Vector3> {
+            let dyn_obj_radius = dyn_obj.get_bounding_circle_radius();
+            let other_obj_radius = other_obj.get_bounding_circle_radius();
+            let distance_between_centers = (dyn_obj.get_center() - other_obj.get_center()).length();
+            if dyn_obj_radius + other_obj_radius < distance_between_centers {
+                return None;
             }
-            let collided = player_object.collides_with(Box::new(dynamic_object as &dyn Physical));
-            match collided {
-                Some(mtv) => {
-                    let collision_object1 = CollisionObject1::Player;
-                    let collision_object2 = CollisionObject2::Dynamic(i);
-                    collisions.push((collision_object1, collision_object2, mtv));
-                }
+            return dyn_obj.collides_with(other_obj);
+        }
+
+        // Check player collisions
+        let mut collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> = Vec::new();
+        for i in 0..self.dynamic_objects.len() {
+            match calculate_mtv(&self.player.dynamic_body, Box::new(&self.dynamic_objects[i] as &dyn Physical)) {
+                Some(mtv) => collisions.push((CollisionObject1::Player, CollisionObject2::Dynamic(i), mtv)),
                 None => {}
             }
         }
         for i in 0..self.static_objects.len() {
-            let static_object = &self.static_objects[i];
-            let distance_between_centers = (player_object.get_center() - static_object.get_center()).length();
-            if player_radius + static_object.get_bounding_circle_radius() < distance_between_centers {
-                continue;
-            }
-            let collided = player_object.collides_with(Box::new(static_object as &dyn Physical));
-            match collided {
-                Some(mtv) => {
-                    let collision_object1 = CollisionObject1::Player;
-                    let collision_object2 = CollisionObject2::Static(i);
-                    collisions.push((collision_object1, collision_object2, mtv));
-                }
+            match calculate_mtv(&self.player.dynamic_body, Box::new(&self.static_objects[i] as &dyn Physical)) {
+                Some(mtv) => collisions.push((CollisionObject1::Player, CollisionObject2::Static(i), mtv)),
                 None => {}
             }
         }
 
         // Check all other dynamic object collisions
         for i in 0..self.dynamic_objects.len() {
-            let dynamic_object1 = &self.dynamic_objects[i];
-            let radius1 = dynamic_object1.get_bounding_circle_radius();
             for j in 0..self.static_objects.len() {
-                let static_object = &self.static_objects[j];
-                let distance_between_centers =
-                    (dynamic_object1.get_center() - static_object.get_center()).length();
-                if radius1 + static_object.get_bounding_circle_radius() < distance_between_centers {
-                    continue;
-                }
-
-                let collided = dynamic_object1.collides_with(Box::new(static_object as &dyn Physical));
-                match collided {
-                    Some(mtv) => {
-                        let collision_object1 = CollisionObject1::Dynamic(i);
-                        let collision_object2 = CollisionObject2::Static(j);
-                        collisions.push((collision_object1, collision_object2, mtv));
-                    }
+                match calculate_mtv(&self.dynamic_objects[i], Box::new(&self.static_objects[j] as &dyn Physical)) {
+                    Some(mtv) => collisions.push((CollisionObject1::Dynamic(i), CollisionObject2::Static(j), mtv)),
                     None => {}
                 }
-            }
+           }
 
             for j in i + 1..self.dynamic_objects.len() {
-                let dynamic_object2 = &self.dynamic_objects[j];
-                let distance_between_centers =
-                    (dynamic_object1.get_center() - dynamic_object2.get_center()).length();
-                if radius1 + dynamic_object2.get_bounding_circle_radius() < distance_between_centers
-                {
-                    continue;
-                }
-
-                let collided = dynamic_object1.collides_with(Box::new(dynamic_object2 as &dyn Physical));
-                match collided {
-                    Some(mtv) => {
-                        let collision_object1 = CollisionObject1::Dynamic(i);
-                        let collision_object2 = CollisionObject2::Dynamic(j);
-                        collisions.push((collision_object1, collision_object2, mtv));
-                    }
+                match calculate_mtv(&self.dynamic_objects[i], Box::new(&self.dynamic_objects[j] as &dyn Physical)) {
+                    Some(mtv) => collisions.push((CollisionObject1::Dynamic(i), CollisionObject2::Dynamic(j), mtv)),
                     None => {}
                 }
             }
@@ -217,7 +173,6 @@ impl Game {
 
     fn simulate_collisions(&mut self, collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)>) {
         for collision in collisions {
-            println!("{:#?}", collision.2);
             match collision.0 {
                 CollisionObject1::Player => {
                     self.player.move_by(collision.2);
