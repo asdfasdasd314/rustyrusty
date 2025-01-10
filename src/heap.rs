@@ -1,10 +1,7 @@
 use crate::math_util::*;
+use crate::hashable_vector::*;
 use raylib::prelude::*;
-
-fn calculate_cos_of_angle(vec1: &Vector2, vec2: &Vector2) -> f32 {
-    return vec1.dot(*vec2)
-        / (vec1.length() * vec2.length());
-}
+use std::collections::HashSet;
 
 /**
 Returns true if the first point should come before the second point,
@@ -16,8 +13,23 @@ and I just wanted to implement a heap because it's cool, and now I have a much b
 fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Vector2, point2: &Vector2) -> bool {
     let root_vec = comparison_axis.p1 - comparison_axis.p0;
 
-    let vec1 = *point1 - comparison_axis.p0;
-    let vec2 = *point2 - comparison_axis.p0;
+    let vec1 = *point1 - comparison_axis.p1;
+    let vec2 = *point2 - comparison_axis.p1;
+
+    // Check if the first point is the root point, then unless the second point lies in the same line as the comparison axis, return true
+    if vec1.length() == 0.0 && vec2.length() != 0.0 {
+        let second_cos = calculate_cos_of_angle(&root_vec, &vec2);
+        return second_cos != 1.0;
+    }
+    else if vec2.length() == 0.0 && vec1.length() != 0.0 {
+        let first_cos = calculate_cos_of_angle(&root_vec, &vec1);
+        return first_cos == 1.0;
+    }
+    else if vec1.length() == 0.0 && vec2.length() == 0.0 {
+        // Just return true if there's a duplicate, will be removed later
+        return true;
+    }
+
     let cos_angle1 = calculate_cos_of_angle(&root_vec, &vec1);
     let cos_angle2 = calculate_cos_of_angle(&root_vec, &vec2);
 
@@ -156,7 +168,7 @@ pub mod custom_heap {
         comparison_axis: &ComparisonAxis,
         array: &mut Vec<Vector2>,
     ) {
-        for i in (0..array.len() / 2).rev() {
+        for i in (0..=array.len() / 2).rev() {
             sift_down(comparison_axis, i, array);
         }
     }
@@ -203,7 +215,7 @@ pub mod custom_heap {
     }
 
     /**
-    Sorts the array using heapsort
+    Sorts the array using heapsort while removing duplicates
     `actual_root` is the root point of the polygon
     `comparison_point` is another point that defines the line for which all points will compare their angle with it to
      */
@@ -213,9 +225,15 @@ pub mod custom_heap {
     ) {
         heapify(comparison_axis, array);
         // We use Vec::new() and not Vec::with_capacity() because technically this will be O(1) space
+        let mut used_points: HashSet<HashableVector2> = HashSet::new();
         let mut new_array: Vec<Vector2> = Vec::new();
         for _ in 0..array.len() {
-            new_array.push(heap_pop(comparison_axis, array).unwrap());
+            let top = heap_pop(comparison_axis, array).unwrap();
+            let hashable_top = HashableVector2::from_vector2(top);
+            if !used_points.contains(&hashable_top) {
+                used_points.insert(hashable_top);
+                new_array.push(top);
+            }
 
             // I 1000000% understand that this is slower, but for the purpose of the O(1) space, which honestly if I'm implementing heapsort, I'm more interested in the space
             // then this is better
@@ -225,21 +243,23 @@ pub mod custom_heap {
     }
 }
 
+pub fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Vector2]) -> bool {
+    for i in 0..values.len() - 1 {
+        if !compare_order_of_two_points(comparison_axis, &values[i], &values[i + 1]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 #[cfg(test)]
 mod tests {
     use raylib::prelude::*;
     use super::*;
     use super::custom_heap::*;
 
-    fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Vector2]) -> bool {
-        for i in 0..values.len() - 1 {
-            if !compare_order_of_two_points(comparison_axis, &values[i], &values[i + 1]) {
-                return false;
-            }
-        }
-
-        return true;
-    }
+    
 
     #[test]
     fn test_heapsort() {

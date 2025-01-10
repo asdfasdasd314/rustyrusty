@@ -1,21 +1,32 @@
 use crate::heap::custom_heap::*;
-use crate::render::{MeshShape, Polygon};
-use std::cmp;
+use crate::round::*;
+use crate::render::*;
 
 use raylib::prelude::*;
 
-pub const fn f32_min(a: f32, b: f32) -> f32 {
-    if a < b {
-        return a;
+pub fn f32_min(nums: &[f32]) -> f32 {
+    let mut min = nums[0];
+    for num in nums {
+        if *num < min {
+            min = *num
+        }
     }
-    return b;
+    return min;
 }
 
-pub const fn f32_max(a: f32, b: f32) -> f32 {
-    if a > b {
-        return a;
+pub fn f32_max(nums: &[f32]) -> f32 {
+    let mut max = nums[0];
+    for num in nums {
+        if *num > max {
+            max = *num
+        }
     }
-    return b;
+    return max;
+}
+
+pub fn calculate_cos_of_angle(vec1: &Vector2, vec2: &Vector2) -> f32 {
+    return vec1.dot(*vec2)
+        / (vec1.length() * vec2.length());
 }
 
 pub enum PlaneIntersection {
@@ -80,53 +91,48 @@ impl Plane {
     Projects a point in 3-space onto the plane
      */
     pub fn project_point(&self, point: &Vector3) -> Vector3 {
-        let d_vec = *point - self.p0;
-
-        let normal_magnitude = self.n.length();
-        let d_magnitude = d_vec.length();
-
-        if d_magnitude == 0.0 {
-            return *point;
-        }
-
-        // theta is in radians
-        let theta = (self.n.dot(d_vec) / (normal_magnitude * d_magnitude)).acos();
-
-        let height = d_magnitude * (90.0 - theta.to_degrees()).to_radians().sin();
-        let height_vec = self.n * (height / normal_magnitude);
-
-        return *point - height_vec;
+        let t = (self.n.x * (point.x - self.p0.x) + self.n.y * (point.y - self.p0.y) + self.n.z * (point.z - self.p0.z)) / self.n.length();
+        return Vector3::new(
+            point.x - t * self.n.x,
+            point.y - t * self.n.y,
+            point.z - t * self.n.z,
+        );
     }
 
-    pub fn project_mesh(&self, mesh: &Box<dyn MeshShape>) -> Polygon {
+    pub fn project_mesh(&self, mesh: &Box<dyn MeshShape>) -> Box<dyn SATAble2D> {
         // Project each individual point onto the plane
         let mut projected_points: Vec<Vector3> = Vec::new();
-
-        for polygon in mesh.get_polygons() {
-            for point in &polygon.points {
-                projected_points.push(self.project_point(point));
-            }
+        
+        for point in mesh.get_vertices() {
+            let projected_point = self.project_point(&point);
+            projected_points.push(projected_point);
         }
 
         // Convert the points to 2D
         let point_projector = TwoDimensionalPointProjector::new(self.clone());
         let mut two_dimensional_points = point_projector.project_into_2d(&projected_points);
+        
+        two_dimensional_points.iter_mut().for_each(|point| {
+            point.x = f32_round(point.x);
+            point.y = f32_round(point.y);
+        });
 
         // Get the axis for which all points will be compared to
         let comparison_axis = ComparisonAxis::new(&two_dimensional_points);
 
         // Perform Graham's check to get the points of the polygon
 
-        // Sort based on the root pointt
+        // Sort based on the root point, this also removes duplicate points
         heapsort(&comparison_axis, &mut two_dimensional_points);
 
         // I implemented graham's scan in such a way that sometimes the root isn't included
-        let mut bounding_points = graham_scan(&two_dimensional_points);
-
+        let bounding_points = graham_scan(&comparison_axis.p1, &two_dimensional_points);
         // It doesn't matter what order they are in the end at this point
-        if bounding_points[0] != comparison_axis.p1 {
-            bounding_points.push(comparison_axis.p1);
-        }
+
+        // Okay I might have figured out the issue...
+        // Sometimes graham's scan won't get rid of points that are collinear that define the convex shape resulting in say 5 points instead of only 4 that were necessary to define the shape
+        // This might be the reason for the small mtvs, because in some cases the resultant projection will have extra points on the edges which means smaller mtvs
+        // So graham's scan has to get rid of these, I don't want to do this right now though, so I'll do it tomorrow
 
         return Polygon::new(point_projector.project_into_3d(&bounding_points));
     }
@@ -151,7 +157,7 @@ impl Plane {
      */
     pub fn calculate_line_intersection(&self, other: &Plane) -> PlaneIntersection {
         if !self.intersects(other) {
-            panic!("The planes passed tot calculate_line_intersection_between_planes should intersect at some point, and this should be checked");
+            panic!("The planes passed to calculate_line_intersection_between_planes should intersect at some point, and this should be checked");
         }
 
         let parallel = self.n.cross(other.n);
@@ -218,22 +224,31 @@ impl Line3D {
         Self { p0, v }
     }
 
-    pub fn from_line_segment(line_segment: (Vector3, Vector3)) -> Self {
-        let vec = line_segment.1 - line_segment.0;
-        Line3D::from_point_and_parallel_vec(line_segment.0, vec)
+    pub fn from_line_segment(line_segment: &LineSegment3D) -> Self {
+        let vec = line_segment.point2 - line_segment.point1;
+        Line3D::from_point_and_parallel_vec(line_segment.point1, vec)
     }
 
     /**
      * Finds the value of t such the equations for the point of the line are satasfied for the given point
      */
     pub fn find_t_from_point(&self, point: Vector3) -> f32 {
-        let direction_vec = point - self.p0;
-        if self.v.x == 0.0 && self.v.y == 0.0 {
-            direction_vec.z / self.v.z
-        } else if self.v.x == 0.0 && self.v.z == 0.0 {
-            direction_vec.y / self.v.y
-        } else {
-            direction_vec.x / self.v.x
+        let vec2 = point - self.p0;
+        let abs_t = vec2.length() / self.v.length();
+
+        // Now determine the direction
+        let p1 = self.p0 + vec2;
+        let p2 = self.p0 - vec2;
+
+        // Determine which point is closer to the point in the direction of the terminal point of the root vec
+        let terminal_point = self.p0 + self.v;
+
+        if (terminal_point - p1).length() > (terminal_point - p2).length() {
+            // If we get closer when we subtract the vector, then we are going away, so t is negative
+            return abs_t * -1.0;
+        }
+        else {
+            return abs_t;
         }
     }
 
@@ -248,13 +263,13 @@ impl Line3D {
         )
     }
 
-    pub fn project_polygon_onto_line(&self, polygon: &Polygon) -> (Vector3, Vector3) {
+    pub fn project_polygon(&self, polygon: &Polygon) -> LineSegment3D {
         let line_dir = self.v.normalized();
-
+        let points = &polygon.points;
         let mut t_min = f32::INFINITY;
         let mut t_max = f32::NEG_INFINITY;
 
-        for point in &polygon.points {
+        for point in points {
             let vec_to_point = *point - self.p0;
 
             let t = vec_to_point.dot(line_dir);
@@ -269,8 +284,34 @@ impl Line3D {
 
         let start_point = self.p0 + line_dir * t_min;
         let end_point = self.p0 + line_dir * t_max;
+        
+        LineSegment3D::new(start_point, end_point)
+    }
 
-        (start_point, end_point)
+    pub fn project_satable_object(&self, obj: &Box<dyn SATAble2D>) -> LineSegment3D {
+        let points = obj.get_vertices();
+
+        let line_dir = self.v.normalized();
+        let mut t_min = f32::INFINITY;
+        let mut t_max = f32::NEG_INFINITY;
+
+        for point in points {
+            let vec_to_point = point - self.p0;
+
+            let t = vec_to_point.dot(line_dir);
+
+            if t < t_min {
+                t_min = t;
+            }
+            if t > t_max {
+                t_max = t;
+            }
+        }
+
+        let start_point = self.p0 + line_dir * t_min;
+        let end_point = self.p0 + line_dir * t_max;
+        
+        LineSegment3D::new(start_point, end_point)
     }
 
     /**
@@ -330,7 +371,7 @@ impl Line2D {
 
             let p1_magnitude = (proj_p1 - point1).length();
             let p2_magnitude = (proj_p2 - point2).length();
-            t = (p2_magnitude - p1_magnitude) / f32_min(p1_magnitude, p2_magnitude);
+            t = (p2_magnitude - p1_magnitude) / f32_min(&[p1_magnitude, p2_magnitude]);
         }
 
         return LineIntersection::Point(self.p0 + self.v * t);
@@ -370,15 +411,8 @@ impl ComparisonAxis {
             }
         }
 
-        let p1;
-        let p0;
-        if min_x_index == min_y_index {
-            p1 = points[min_y_index];
-            p0 = Vector2::new(p1.x - 1.0, p1.y);
-        } else {
-            p1 = points[min_y_index];
-            p0 = Vector2::new(points[min_x_index].x, p1.y);
-        }
+        let p1 = Vector2::new(points[min_x_index].x, points[min_y_index].y);
+        let p0 = Vector2::new(points[min_x_index].x - 1.0, points[min_y_index].y);
 
         ComparisonAxis { p0, p1 }
     }
@@ -390,24 +424,30 @@ The reason the overall algorithm is nlogn is because the sorting takes nlogn
 Yes I understand I'm working with a limited number of points, and often the data is nearly sorted so heapsort
 and this worrying about time complexity is wrong, but I am doing this project TO LEARN, so it doesn't matter
  */
-fn graham_scan(projected_points: &[Vector2]) -> Vec<Vector2> {
-    fn is_counter_clockwise(point1: &Vector2, point2: &Vector2, point3: &Vector2) -> bool {
-        (point2.x - point1.x) * (point3.y - point1.y)
-            - (point2.y - point1.y) * (point3.x - point1.x)
-            > 0.0
+fn graham_scan(root: &Vector2, projected_points: &[Vector2]) -> Vec<Vector2> {
+    fn is_counter_clockwise(p: &Vector2, q: &Vector2, r: &Vector2) -> bool {
+        (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x) < 0.0
     }
 
-    let mut stack: Vec<Vector2> = Vec::new();
-
+    let mut stack: Vec<Vector2> = vec![*root];
     for point in projected_points {
+        if point == root {
+            continue;
+        }
+
         // The check for the length greater than 1 is done so it's possible to verify the angle
         while stack.len() > 1
-            && !is_counter_clockwise(&stack[stack.len() - 2], &stack[stack.len() - 1], point)
+            && !is_counter_clockwise(&stack[stack.len() - 1], &stack[stack.len() - 2], point)
         {
             stack.pop();
         }
 
         stack.push(*point);
+    }
+
+    // If we only have two points we may have a line, wihich is a valid polygon for my code
+    if stack.len() > 2 && !is_counter_clockwise(&stack[stack.len() - 1], &stack[stack.len() - 2], &stack[0]) {
+        stack.pop();
     }
 
     stack
@@ -526,48 +566,7 @@ impl TwoDimensionalPointProjector {
     }
 }
 
-/**
-The two line segments passed in should be colinear
-Calculates the amount of overlap between two line segments (returns `None` if they don't overlap)
- */
-pub fn line_segments_overlap(
-    line_segment1: (Vector3, Vector3),
-    line_segment2: (Vector3, Vector3),
-) -> Option<f32> {
-    let base_line: Line3D;
-    let other_segment: &(Vector3, Vector3);
-    // Check if line segment1 is just a point
-    if line_segment1.0 == line_segment1.1 {
-        // Turn line segment 2 into a line because line segment1 is a point
-        base_line = Line3D::from_line_segment(line_segment2);
-        other_segment = &line_segment1;
-    } else {
-        base_line = Line3D::from_line_segment(line_segment1);
-        other_segment = &line_segment2;
-    }
 
-    let t1 = base_line.find_t_from_point(other_segment.0);
-    let t2 = base_line.find_t_from_point(other_segment.1);
-    if t1 < 0.0 && t2 < 0.0 {
-        return None;
-    }
-    if t1 < t2 {
-        if t1 < 0.0 {
-            return Some((f32_min(t2, 1.0)) * base_line.v.length());
-        }
-        else {
-            return Some((f32_min(t2, 1.0) - f32_min(t1, 1.0)) * base_line.v.length());
-        }
-    }
-    else {
-        if t2 < 0.0 {
-            return Some((f32_min(t1, 1.0)) * base_line.v.length());
-        }
-        else {
-            return Some((f32_min(t1, 1.0) - f32_min(t2, 1.0)) * base_line.v.length());
-        }
-    }
-}
 
 // Calculates the difference in between the angles of the vectors using the base_vec as the base
 // **in degrees**

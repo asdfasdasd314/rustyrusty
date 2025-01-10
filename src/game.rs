@@ -1,13 +1,17 @@
 use crate::physics::*;
 use crate::player::*;
+use crate::world_gen::*;
+use crate::round::*;
 use raylib::prelude::*;
 
 // These usizes are the indices in the dynamic and static object vecs in Game struct
+#[derive(Debug)]
 enum CollisionObject1 {
     Player,
     Dynamic(usize),
 }
 
+#[derive(Debug)]
 enum CollisionObject2 {
     Dynamic(usize),
     Static(usize),
@@ -21,6 +25,7 @@ pub struct Game {
     static_objects: Vec<StaticBody>,
 
     cursor_shown: bool,
+    in_debug_mode: bool,
 
     raylib_handle: RaylibHandle,
     raylib_thread: RaylibThread,
@@ -45,17 +50,20 @@ impl Game {
             dynamic_objects,
             static_objects,
             cursor_shown: false,
+            in_debug_mode: false,
             raylib_handle: rl,
             raylib_thread: thread,
         };
 
         game.raylib_handle.hide_cursor();
         game.raylib_handle.disable_cursor();
+
         return game;
     }
 
     // Perhaps this could change in the future, but the game loop loops forever and never returns
     pub fn game_loop(&mut self) {
+        self.generate_world();
         while !self.raylib_handle.window_should_close() {
             // Calculate delta time
             let delta_time = self.raylib_handle.get_frame_time();
@@ -74,11 +82,21 @@ impl Game {
                 }
                 self.cursor_shown = !self.cursor_shown;
             }
+            if self.raylib_handle.is_key_pressed(KeyboardKey::KEY_ZERO) {
+                self.in_debug_mode = !self.in_debug_mode;
+                if self.in_debug_mode {
+                    println!("Switching to debug mode");
+                }
+                else {
+                    println!("Exiting debug mode");
+                }
+            }
 
             // Do user input and movement
             self.player.update(&self.raylib_handle, delta_time);
 
-            let collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> = self.find_colliding_objects();
+            let collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> =
+                self.find_colliding_objects();
             if collisions.len() > 0 {
                 self.simulate_collisions(collisions);
             }
@@ -93,22 +111,25 @@ impl Game {
                 let mut draw_handle_3d = draw_handle.begin_mode3D(self.player.camera);
 
                 for object in &self.static_objects {
-                    object.mesh.render(&mut draw_handle_3d);
+                    object.mesh.render(&mut draw_handle_3d, self.in_debug_mode);
                 }
 
                 for object in &self.dynamic_objects {
-                    object.mesh.render(&mut draw_handle_3d);
+                    object.mesh.render(&mut draw_handle_3d, self.in_debug_mode);
                 }
 
                 match self.player.camera_type {
                     CameraType::FirstPerson => {}
                     CameraType::ThirdPerson(_) => {
-                        self.player.dynamic_body.mesh.render(&mut draw_handle_3d);
+                        self.player.dynamic_body.mesh.render(&mut draw_handle_3d, self.in_debug_mode);
                     }
                 }
             }
 
             draw_handle.draw_fps(10, 10);
+
+            let player_center = self.player.dynamic_body.get_center();
+            draw_handle.draw_text(&format!("{} {} {}", player_center.x, player_center.y, player_center.z), 10, 40, 20, Color::BLACK);
         }
     }
 
@@ -127,9 +148,9 @@ impl Game {
      */
     fn find_colliding_objects(&self) -> Vec<(CollisionObject1, CollisionObject2, Vector3)> {
         fn calculate_mtv(dyn_obj: &DynamicBody, other_obj: Box<&dyn Physical>) -> Option<Vector3> {
-            let dyn_obj_radius = dyn_obj.get_bounding_circle_radius();
-            let other_obj_radius = other_obj.get_bounding_circle_radius();
-            let distance_between_centers = (dyn_obj.get_center() - other_obj.get_center()).length();
+            let dyn_obj_radius = f32_round(dyn_obj.get_bounding_circle_radius());
+            let other_obj_radius = f32_round(other_obj.get_bounding_circle_radius());
+            let distance_between_centers = f32_round((dyn_obj.get_center() - other_obj.get_center()).length());
             if dyn_obj_radius + other_obj_radius < distance_between_centers {
                 return None;
             }
@@ -139,14 +160,24 @@ impl Game {
         // Check player collisions
         let mut collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> = Vec::new();
         for i in 0..self.dynamic_objects.len() {
-            match calculate_mtv(&self.player.dynamic_body, Box::new(&self.dynamic_objects[i] as &dyn Physical)) {
-                Some(mtv) => collisions.push((CollisionObject1::Player, CollisionObject2::Dynamic(i), mtv)),
+            match calculate_mtv(
+                &self.player.dynamic_body,
+                Box::new(&self.dynamic_objects[i] as &dyn Physical),
+            ) {
+                Some(mtv) => {
+                    collisions.push((CollisionObject1::Player, CollisionObject2::Dynamic(i), mtv))
+                }
                 None => {}
             }
         }
         for i in 0..self.static_objects.len() {
-            match calculate_mtv(&self.player.dynamic_body, Box::new(&self.static_objects[i] as &dyn Physical)) {
-                Some(mtv) => collisions.push((CollisionObject1::Player, CollisionObject2::Static(i), mtv)),
+            match calculate_mtv(
+                &self.player.dynamic_body,
+                Box::new(&self.static_objects[i] as &dyn Physical),
+            ) {
+                Some(mtv) => {
+                    collisions.push((CollisionObject1::Player, CollisionObject2::Static(i), mtv))
+                }
                 None => {}
             }
         }
@@ -154,15 +185,29 @@ impl Game {
         // Check all other dynamic object collisions
         for i in 0..self.dynamic_objects.len() {
             for j in 0..self.static_objects.len() {
-                match calculate_mtv(&self.dynamic_objects[i], Box::new(&self.static_objects[j] as &dyn Physical)) {
-                    Some(mtv) => collisions.push((CollisionObject1::Dynamic(i), CollisionObject2::Static(j), mtv)),
+                match calculate_mtv(
+                    &self.dynamic_objects[i],
+                    Box::new(&self.static_objects[j] as &dyn Physical),
+                ) {
+                    Some(mtv) => collisions.push((
+                        CollisionObject1::Dynamic(i),
+                        CollisionObject2::Static(j),
+                        mtv,
+                    )),
                     None => {}
                 }
-           }
+            }
 
             for j in i + 1..self.dynamic_objects.len() {
-                match calculate_mtv(&self.dynamic_objects[i], Box::new(&self.dynamic_objects[j] as &dyn Physical)) {
-                    Some(mtv) => collisions.push((CollisionObject1::Dynamic(i), CollisionObject2::Dynamic(j), mtv)),
+                match calculate_mtv(
+                    &self.dynamic_objects[i],
+                    Box::new(&self.dynamic_objects[j] as &dyn Physical),
+                ) {
+                    Some(mtv) => collisions.push((
+                        CollisionObject1::Dynamic(i),
+                        CollisionObject2::Dynamic(j),
+                        mtv,
+                    )),
                     None => {}
                 }
             }
@@ -171,7 +216,10 @@ impl Game {
         collisions
     }
 
-    fn simulate_collisions(&mut self, collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)>) {
+    fn simulate_collisions(
+        &mut self,
+        collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)>,
+    ) {
         for collision in collisions {
             match collision.0 {
                 CollisionObject1::Player => {
@@ -181,6 +229,17 @@ impl Game {
                     self.dynamic_objects[index].move_by(collision.2);
                 }
             }
+        }
+    }
+
+    fn generate_world(&mut self) {
+        let height_map = generate_height_map();
+        let world_mesh = create_mesh_from_height_map(height_map, Vector2::new(0.0, 0.0), 4.0, 4.0);
+
+        // Add the mesh to the world so it will be rendered
+        for mesh in world_mesh {
+            let static_body = StaticBody::new(mesh.get_center(), mesh);
+            self.add_static_object(static_body);
         }
     }
 }

@@ -3,8 +3,9 @@ use crate::math_util::{Line3D, Plane};
 use crate::render::*;
 use raylib::prelude::*;
 use std::collections::HashSet;
+use std::fmt::Debug;
 
-pub trait Physical {
+pub trait Physical: Debug {
     fn get_center(&self) -> Vector3;
     fn get_bounding_circle_radius(&self) -> f32;
     fn get_mesh(&self) -> &Box<dyn MeshShape>;
@@ -107,10 +108,13 @@ impl DynamicBody {
             let first_mesh_polygons = mesh1.get_polygons();
             for polygon1 in &first_mesh_polygons {
                 let projection_plane = polygon1.calculate_orthogonal_plane();
-                let projected_polygon1 = projection_plane.project_mesh(mesh1);
-                let projected_polygon2 = projection_plane.project_mesh(mesh2);
+                let projected_obj1: Box<dyn SATAble2D> = projection_plane.project_mesh(mesh1);
+                let projected_obj2: Box<dyn SATAble2D> = projection_plane.project_mesh(mesh2);
+
+                //println!("{:#?} {:#?} {:#?} {:#?} {:#?}", projection_plane, mesh1, mesh2, projected_polygon1, projected_polygon2);
 
                 // Determine if we've already seen this
+                // We  don't round the plane directions because they are normalized, so the values are too small for it to be rounded unless we used a precision of like 6 digits
                 let mut direction = projection_plane.n.normalized();
                 if direction.y < 0.0 {
                     direction *= -1.0;
@@ -118,8 +122,9 @@ impl DynamicBody {
                 if checked_planes.contains(&HashableVector3::from_vector3(direction)) {
                     continue;
                 }
+                
+                let collision = collision_detection_2d(projected_obj1, projected_obj2);
 
-                let collision = projected_polygon1.collides_with(&projected_polygon2);
                 match collision {
                     Some(collision) => {
                         if collision.0 < overlap {
@@ -141,16 +146,20 @@ impl DynamicBody {
                     return SATResult::MTV(overlap, axis);
                 }
                 None => {
-                   return SATResult::AllAxesChecked;
+                    return SATResult::AllAxesChecked;
                 }
             }
         }
 
-        fn align_direction_vec(direction_vec: &mut Vector3, dynamic_body_mesh: &Box<dyn MeshShape>, other_mesh: &Box<dyn MeshShape>) {
+        fn align_direction_vec(
+            direction_vec: &mut Vector3,
+            dynamic_body_mesh: &Box<dyn MeshShape>,
+            other_mesh: &Box<dyn MeshShape>,
+        ) {
             // The direction vector is going to either be correct, or flipped, so walk in each direction, and the one that gets further from the other mesh's center is the right direction
             let dynamic_body_center = dynamic_body_mesh.get_center();
             let other_body_center = other_mesh.get_center();
-            
+
             let center1 = dynamic_body_center + *direction_vec;
             let center2 = dynamic_body_center - *direction_vec;
 
@@ -160,18 +169,15 @@ impl DynamicBody {
             }
         }
 
-        let mut min_overlap = 0.0;
-        let mut direction: Vector3 = Vector3::new(0.0, 0.0, 0.0,);
+        let mut min_overlap = f32::MAX;
+        let mut direction: Vector3 = Vector3::new(0.0, 0.0, 0.0);
         let mut checked_planes: HashSet<HashableVector3> = HashSet::new();
         let collision1 =
             separating_axis_theorem_3d(&self.mesh, other.get_mesh(), &mut checked_planes);
         match collision1 {
             SATResult::MTV(overlap, direction_vec) => {
                 min_overlap = overlap;
-
-                // This is going to have to be reversed based on the direction it's facing, but that's a later problem, right now I just want to put the code down
                 direction = direction_vec;
-                // TODO
             }
             SATResult::NoCollision => {
                 return None;
@@ -179,16 +185,16 @@ impl DynamicBody {
             SATResult::AllAxesChecked => {}
         }
 
+        // Investigate x: 57 y: -6 z: 18
+
+        // The problem is in checking from the perspective of the plane
         let collision2 =
             separating_axis_theorem_3d(other.get_mesh(), &self.mesh, &mut checked_planes);
         match collision2 {
             SATResult::MTV(overlap, direction_vec) => {
                 if overlap < min_overlap {
                     min_overlap = overlap;
-
-                    // This is going to have to be reversed based on the direction it's facing, but that's a later problem, right now I just want to put the code down
                     direction = direction_vec;
-                    // TODO
                 }
             }
             SATResult::NoCollision => {
