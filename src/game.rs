@@ -1,7 +1,7 @@
 use crate::physics::*;
 use crate::player::*;
 use crate::world_gen::*;
-use crate::round::*;
+use crate::float_precision::*;
 use raylib::prelude::*;
 
 // These usizes are the indices in the dynamic and static object vecs in Game struct
@@ -93,12 +93,16 @@ impl Game {
             }
 
             // Do user input and movement
-            self.player.update(&self.raylib_handle, delta_time);
+            self.player.update(&self.raylib_handle, delta_time as f64);
 
-            let collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> =
+            let collisions: Vec<(CollisionObject1, CollisionObject2, Vector3f64)> =
                 self.find_colliding_objects();
             if collisions.len() > 0 {
                 self.simulate_collisions(collisions);
+                println!("Colliding");
+            }
+            else {
+                println!("Not colliding");
             }
 
             // Begin rendering
@@ -146,11 +150,11 @@ impl Game {
     Second entry in the return is the second collision that is "hit" by the first collision object (either a dynamic object or static body, and if it were multiplayer it could be another player object)
     Third entry is the mtv which is applied to the first object to fix intersections between objects
      */
-    fn find_colliding_objects(&self) -> Vec<(CollisionObject1, CollisionObject2, Vector3)> {
-        fn calculate_mtv(dyn_obj: &DynamicBody, other_obj: Box<&dyn Physical>) -> Option<Vector3> {
-            let dyn_obj_radius = f32_round(dyn_obj.get_bounding_circle_radius());
-            let other_obj_radius = f32_round(other_obj.get_bounding_circle_radius());
-            let distance_between_centers = f32_round((dyn_obj.get_center() - other_obj.get_center()).length());
+    fn find_colliding_objects(&self) -> Vec<(CollisionObject1, CollisionObject2, Vector3f64)> {
+        fn calculate_mtv(dyn_obj: &DynamicBody, other_obj: Box<&dyn Physical>) -> Option<Vector3f64> {
+            let dyn_obj_radius = f64_round(dyn_obj.get_bounding_circle_radius());
+            let other_obj_radius = f64_round(other_obj.get_bounding_circle_radius());
+            let distance_between_centers = f64_round((dyn_obj.get_center() - other_obj.get_center()).length());
             if dyn_obj_radius + other_obj_radius < distance_between_centers {
                 return None;
             }
@@ -158,7 +162,7 @@ impl Game {
         }
 
         // Check player collisions
-        let mut collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)> = Vec::new();
+        let mut collisions: Vec<(CollisionObject1, CollisionObject2, Vector3f64)> = Vec::new();
         for i in 0..self.dynamic_objects.len() {
             match calculate_mtv(
                 &self.player.dynamic_body,
@@ -218,7 +222,7 @@ impl Game {
 
     fn simulate_collisions(
         &mut self,
-        collisions: Vec<(CollisionObject1, CollisionObject2, Vector3)>,
+        collisions: Vec<(CollisionObject1, CollisionObject2, Vector3f64)>,
     ) {
         for collision in collisions {
             match collision.0 {
@@ -234,7 +238,7 @@ impl Game {
 
     fn generate_world(&mut self) {
         let height_map = generate_height_map();
-        let world_mesh = create_mesh_from_height_map(height_map, Vector2::new(0.0, 0.0), 4.0, 4.0);
+        let world_mesh = create_mesh_from_height_map(height_map, Vector2f64::new(0.0, 0.0), 4.0, 4.0);
 
         // Add the mesh to the world so it will be rendered
         for mesh in world_mesh {

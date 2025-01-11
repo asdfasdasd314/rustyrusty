@@ -1,5 +1,6 @@
 use crate::math_util::*;
-use crate::hashable_vector::*;
+use crate::float_precision::*;
+use crate::hashable::*;
 use raylib::prelude::*;
 use std::collections::HashSet;
 
@@ -10,7 +11,7 @@ and false if the second point should come before the first point
 I understand this is what the key would be if I just used sort_by(), but I think there's optimizations I could do with a heap in the future
 and I just wanted to implement a heap because it's cool, and now I have a much better understanding of them
  */
-fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Vector2, point2: &Vector2) -> bool {
+fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Vector2f64, point2: &Vector2f64) -> bool {
     let root_vec = comparison_axis.p1 - comparison_axis.p0;
 
     let vec1 = *point1 - comparison_axis.p1;
@@ -55,7 +56,7 @@ This is a min heap where there are no duplicates and the sorting key is the angl
 pub mod custom_heap {
     use super::*;
 
-    pub fn get_min_point(heap: &[Vector2]) -> Vector2 {
+    pub fn get_min_point(heap: &[Vector2f64]) -> Vector2f64 {
         return heap[0];
     }
 
@@ -67,7 +68,7 @@ pub mod custom_heap {
         return Some(parent_index as usize);
     }
 
-    fn get_left_child_index(heap: &[Vector2], index: usize) -> Option<usize> {
+    fn get_left_child_index(heap: &[Vector2f64], index: usize) -> Option<usize> {
         let left_child_index = 2 * index + 1;
         if left_child_index >= heap.len() {
             return None;
@@ -75,7 +76,7 @@ pub mod custom_heap {
         return Some(left_child_index);
     }
 
-    fn get_right_child_index(heap: &[Vector2], index: usize) -> Option<usize> {
+    fn get_right_child_index(heap: &[Vector2f64], index: usize) -> Option<usize> {
         let right_child_index = 2 * index + 2;
         if right_child_index >= heap.len() {
             return None;
@@ -91,7 +92,7 @@ pub mod custom_heap {
     fn sift_up(
         comparison_axis: &ComparisonAxis,
         mut index: usize,
-        heap: &mut Vec<Vector2>,
+        heap: &mut Vec<Vector2f64>,
     ) {
         while index > 0 {
             let point = heap[index];
@@ -119,7 +120,7 @@ pub mod custom_heap {
     fn sift_down(
         comparison_axis: &ComparisonAxis,
         mut index: usize,
-        heap: &mut Vec<Vector2>,
+        heap: &mut Vec<Vector2f64>,
     ) {
         while index < heap.len() {
             let left_index = get_left_child_index(heap, index);
@@ -166,7 +167,7 @@ pub mod custom_heap {
      */
     pub fn heapify(
         comparison_axis: &ComparisonAxis,
-        array: &mut Vec<Vector2>,
+        array: &mut Vec<Vector2f64>,
     ) {
         for i in (0..=array.len() / 2).rev() {
             sift_down(comparison_axis, i, array);
@@ -180,8 +181,8 @@ pub mod custom_heap {
      */
     pub fn heap_push(
         comparison_axis: &ComparisonAxis,
-        new_element: Vector2,
-        heap: &mut Vec<Vector2>,
+        new_element: Vector2f64,
+        heap: &mut Vec<Vector2f64>,
     ) {
         // Push the element
         heap.push(new_element);
@@ -197,8 +198,8 @@ pub mod custom_heap {
      */
     pub fn heap_pop(
         comparison_axis: &ComparisonAxis,
-        heap: &mut Vec<Vector2>,
-    ) -> Option<Vector2> {
+        heap: &mut Vec<Vector2f64>,
+    ) -> Option<Vector2f64> {
         if heap.len() == 0 {
             return None;
         }
@@ -221,15 +222,15 @@ pub mod custom_heap {
      */
     pub fn heapsort(
         comparison_axis: &ComparisonAxis,
-        array: &mut Vec<Vector2>,
+        array: &mut Vec<Vector2f64>,
     ) {
         heapify(comparison_axis, array);
         // We use Vec::new() and not Vec::with_capacity() because technically this will be O(1) space
         let mut used_points: HashSet<HashableVector2> = HashSet::new();
-        let mut new_array: Vec<Vector2> = Vec::new();
+        let mut new_array: Vec<Vector2f64> = Vec::new();
         for _ in 0..array.len() {
             let top = heap_pop(comparison_axis, array).unwrap();
-            let hashable_top = HashableVector2::from_vector2(top);
+            let hashable_top: HashableVector2 = top.into();
             if !used_points.contains(&hashable_top) {
                 used_points.insert(hashable_top);
                 new_array.push(top);
@@ -243,7 +244,7 @@ pub mod custom_heap {
     }
 }
 
-pub fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Vector2]) -> bool {
+pub fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Vector2f64]) -> bool {
     for i in 0..values.len() - 1 {
         if !compare_order_of_two_points(comparison_axis, &values[i], &values[i + 1]) {
             return false;
@@ -264,17 +265,17 @@ mod tests {
     #[test]
     fn test_heapsort() {
         let mut points = vec![
-            Vector2::new(0.0, 0.0),
-            Vector2::new(1.0, 0.5),
-            Vector2::new(1.0, 0.0),
-            Vector2::new(1.0, 1.0),
-            Vector2::new(0.0, 2.0),
-            Vector2::new(1.0, 2.5),
-            Vector2::new(2.0, 0.0),
-            Vector2::new(1.0, 2.0),
-            Vector2::new(-1.0, 1.0),
-            Vector2::new(-2.0, 1.0),
-            Vector2::new(-0.5, 1.0),
+            Vector2f64::new(0.0, 0.0),
+            Vector2f64::new(1.0, 0.5),
+            Vector2f64::new(1.0, 0.0),
+            Vector2f64::new(1.0, 1.0),
+            Vector2f64::new(0.0, 2.0),
+            Vector2f64::new(1.0, 2.5),
+            Vector2f64::new(2.0, 0.0),
+            Vector2f64::new(1.0, 2.0),
+            Vector2f64::new(-1.0, 1.0),
+            Vector2f64::new(-2.0, 1.0),
+            Vector2f64::new(-0.5, 1.0),
         ];
 
         let comparison_axis = ComparisonAxis::new(&points);

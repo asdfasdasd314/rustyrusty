@@ -1,26 +1,26 @@
-use crate::hashable_vector::HashableVector3;
+use crate::hashable::*;
 use crate::math_util::{Line3D, Plane};
 use crate::render::*;
-use raylib::prelude::*;
+use crate::float_precision::*;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
 pub trait Physical: Debug {
-    fn get_center(&self) -> Vector3;
-    fn get_bounding_circle_radius(&self) -> f32;
+    fn get_center(&self) -> Vector3f64;
+    fn get_bounding_circle_radius(&self) -> f64;
     fn get_mesh(&self) -> &Box<dyn MeshShape>;
 }
 
 pub trait Dynamic {
     // Moves the object and its components by change
-    fn move_by(&mut self, change: Vector3);
+    fn move_by(&mut self, change: Vector3f64);
 }
 
 pub trait Static {}
 
 #[derive(Debug)]
 pub struct StaticBody {
-    pub absolute_position: Vector3,
+    pub absolute_position: Vector3f64,
     pub mesh: Box<dyn MeshShape>,
 }
 
@@ -30,16 +30,16 @@ impl Physical for StaticBody {
     fn get_mesh(&self) -> &Box<dyn MeshShape> {
         return &self.mesh;
     }
-    fn get_bounding_circle_radius(&self) -> f32 {
+    fn get_bounding_circle_radius(&self) -> f64 {
         return self.mesh.get_bounding_circle_radius();
     }
-    fn get_center(&self) -> Vector3 {
+    fn get_center(&self) -> Vector3f64 {
         return self.mesh.get_center();
     }
 }
 
 impl StaticBody {
-    pub fn new(absolute_position: Vector3, mesh: Box<dyn MeshShape>) -> Self {
+    pub fn new(absolute_position: Vector3f64, mesh: Box<dyn MeshShape>) -> Self {
         Self {
             absolute_position,
             mesh,
@@ -50,24 +50,24 @@ impl StaticBody {
 // This object is a basic object that interacts with physics
 #[derive(Debug)]
 pub struct DynamicBody {
-    pub absolute_position: Vector3,
-    pub velocity: Vector3,
+    pub absolute_position: Vector3f64,
+    pub velocity: Vector3f64,
     pub mesh: Box<dyn MeshShape>,
 }
 
 impl Dynamic for DynamicBody {
-    fn move_by(&mut self, change: Vector3) {
+    fn move_by(&mut self, change: Vector3f64) {
         self.absolute_position += change;
         self.mesh.move_by(change);
     }
 }
 
 impl Physical for DynamicBody {
-    fn get_center(&self) -> Vector3 {
+    fn get_center(&self) -> Vector3f64 {
         return self.mesh.get_center();
     }
 
-    fn get_bounding_circle_radius(&self) -> f32 {
+    fn get_bounding_circle_radius(&self) -> f64 {
         return self.mesh.get_bounding_circle_radius();
     }
 
@@ -77,10 +77,10 @@ impl Physical for DynamicBody {
 }
 
 impl DynamicBody {
-    pub fn new(absolute_position: Vector3, mesh: Box<dyn MeshShape>) -> Self {
+    pub fn new(absolute_position: Vector3f64, mesh: Box<dyn MeshShape>) -> Self {
         DynamicBody {
             absolute_position,
-            velocity: Vector3::new(0.0, 0.0, 0.0),
+            velocity: Vector3f64::new(0.0, 0.0, 0.0),
             mesh,
         }
     }
@@ -90,69 +90,10 @@ impl DynamicBody {
     If the objects aren't colliding, then returns `None`
     The MTV should be applied to the dynamic body (root body) of the collision because it's designed to move it out of the other body
      */
-    pub fn collides_with(&self, other: Box<&dyn Physical>) -> Option<Vector3> {
+    pub fn collides_with(&self, other: Box<&dyn Physical>) -> Option<Vector3f64> {
         // We need to find the angle when we look at there is a minimum overlap
-        enum SATResult {
-            MTV(f32, Vector3),
-            AllAxesChecked,
-            NoCollision,
-        }
-
-        fn separating_axis_theorem_3d(
-            mesh1: &Box<dyn MeshShape>,
-            mesh2: &Box<dyn MeshShape>,
-            checked_planes: &mut HashSet<HashableVector3>,
-        ) -> SATResult {
-            let mut overlap: f32 = f32::MAX;
-            let mut axis: Option<Vector3> = None;
-            let first_mesh_polygons = mesh1.get_polygons();
-            for polygon1 in &first_mesh_polygons {
-                let projection_plane = polygon1.calculate_orthogonal_plane();
-                let projected_obj1: Box<dyn SATAble2D> = projection_plane.project_mesh(mesh1);
-                let projected_obj2: Box<dyn SATAble2D> = projection_plane.project_mesh(mesh2);
-
-                //println!("{:#?} {:#?} {:#?} {:#?} {:#?}", projection_plane, mesh1, mesh2, projected_polygon1, projected_polygon2);
-
-                // Determine if we've already seen this
-                // We  don't round the plane directions because they are normalized, so the values are too small for it to be rounded unless we used a precision of like 6 digits
-                let mut direction = projection_plane.n.normalized();
-                if direction.y < 0.0 {
-                    direction *= -1.0;
-                }
-                if checked_planes.contains(&HashableVector3::from_vector3(direction)) {
-                    continue;
-                }
-                
-                let collision = collision_detection_2d(projected_obj1, projected_obj2);
-
-                match collision {
-                    Some(collision) => {
-                        if collision.0 < overlap {
-                            overlap = collision.0;
-                            axis = Some(collision.1);
-                        }
-                    }
-                    None => {
-                        return SATResult::NoCollision;
-                    }
-                }
-
-                // We haven't seen it, so make sure it's clear that we've checked it
-                checked_planes.insert(HashableVector3::from_vector3(direction));
-            }
-
-            match axis {
-                Some(axis) => {
-                    return SATResult::MTV(overlap, axis);
-                }
-                None => {
-                    return SATResult::AllAxesChecked;
-                }
-            }
-        }
-
         fn align_direction_vec(
-            direction_vec: &mut Vector3,
+            direction_vec: &mut Vector3f64,
             dynamic_body_mesh: &Box<dyn MeshShape>,
             other_mesh: &Box<dyn MeshShape>,
         ) {
@@ -169,42 +110,38 @@ impl DynamicBody {
             }
         }
 
-        let mut min_overlap = f32::MAX;
-        let mut direction: Vector3 = Vector3::new(0.0, 0.0, 0.0);
-        let mut checked_planes: HashSet<HashableVector3> = HashSet::new();
-        let collision1 =
-            separating_axis_theorem_3d(&self.mesh, other.get_mesh(), &mut checked_planes);
-        match collision1 {
-            SATResult::MTV(overlap, direction_vec) => {
-                min_overlap = overlap;
-                direction = direction_vec;
+        let mut min_overlap = f64::MAX;
+        let mut direction: Vector3f64 = Vector3f64::new(0.0, 0.0, 0.0);
+        let mut planes: HashSet<HashablePlane> = HashSet::new();
+        let mut all_polygons: Vec<Polygon> = self.get_mesh().get_polygons();
+        all_polygons.extend(other.get_mesh().get_polygons());
+        for polygon in all_polygons {
+            for plane in polygon.calculate_orthogonal_planes() {
+                planes.insert(plane.into());
             }
-            SATResult::NoCollision => {
-                return None;
-            }
-            SATResult::AllAxesChecked => {}
         }
 
-        // Investigate x: 57 y: -6 z: 18
+        for plane in planes {
+            let proj_plane = Plane::from(plane);
+            let proj1 = proj_plane.project_mesh(self.get_mesh());
+            let proj2 = proj_plane.project_mesh(other.get_mesh());
 
-        // The problem is in checking from the perspective of the plane
-        let collision2 =
-            separating_axis_theorem_3d(other.get_mesh(), &self.mesh, &mut checked_planes);
-        match collision2 {
-            SATResult::MTV(overlap, direction_vec) => {
-                if overlap < min_overlap {
-                    min_overlap = overlap;
-                    direction = direction_vec;
+            let collision = collision_detection_2d(proj1, proj2, proj_plane.n);
+            match collision {
+                Some(collision) => {
+                    if collision.0 < min_overlap {
+                        min_overlap = collision.0;
+                        direction = collision.1;
+                    }
+                }
+                None=> {
+                    return None;
                 }
             }
-            SATResult::NoCollision => {
-                return None;
-            }
-            SATResult::AllAxesChecked => {}
         }
 
         align_direction_vec(&mut direction, self.get_mesh(), other.get_mesh());
 
-        return Some(direction.normalized() * min_overlap);
+        return Some(direction * min_overlap);
     }
 }
