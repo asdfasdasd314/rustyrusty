@@ -52,24 +52,17 @@ impl LineSegment3D {
         if t1 < 0.0 && t2 < 0.0 || t1 > 1.0 && t2 > 1.0 {
             return None;
         }
-        if t1 < t2 {
-            if t1 < 0.0 {
-                return Some((f64_min(&[t2, 1.0])) * base_line.v.length());
-            }
-            else {
-                return Some((f64_min(&[t2, 1.0]) - t1) * base_line.v.length());
-            }
+        if t1 < 0.0 || t1 > 1.0 {
+            return Some(f64_min(&[1.0 - t2, t2]) * base_line.v.length());
         }
-        else if t1 > t2 {
-            if t2 < 0.0 {
-                return Some((f64_min(&[t1, 1.0])) * base_line.v.length());
-            }
-            else {
-                return Some((f64_min(&[t1, 1.0]) - t2) * base_line.v.length());
-            }
+        else if t2 < 0.0 || t2 > 1.0 {
+            return Some(f64_min(&[1.0 - t1, t1]) * base_line.v.length());
+        }
+        else if t1 < t2 {
+            return Some(f64_min(&[t2, 1.0 - t1]) * base_line.v.length());
         }
         else {
-            return Some((f64_min(&[t1, 1.0 - t1])) * base_line.v.length());
+            return Some(f64_min(&[t1, 1.0 - t2]) * base_line.v.length());
         }
     }
 }
@@ -170,7 +163,7 @@ impl Polygon {
         let mut planes: Vec<Plane> = Vec::with_capacity(self.points.len());
         for edge in self.get_edges() {
             let edge_vec = edge.point2 - edge.point1;
-            let new_normal = polygon_as_plane.n.cross(edge_vec).normalized();
+            let new_normal = polygon_as_plane.n.cross(edge_vec);
             planes.push(Plane::from_point_and_normal(edge.point1, new_normal));
         }
         return planes;

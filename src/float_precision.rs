@@ -6,10 +6,26 @@ This stuff is for handling floating point precision errors
 */
 
 // `PRECISION` is the number of decimals of precision
-pub const PRECISION: i32 = 10;
+pub const PRECISION: i32 = -1;
 
 pub fn f64_round(x: f64) -> f64 {
+    if PRECISION < 0 {
+        return x;
+    }
     (x * (10.0_f64).powi(PRECISION)).round() / (10.0_f64).powi(PRECISION)
+}
+
+pub fn broad_equal(x: f64, y: f64) -> bool {
+    // I'm going to try using relative error and compare it to f64::EPSILON
+    // Alternatively, they could be subtracted and then compared to f64::EPSILON, but I think this will ensure precision further out(?)
+    // If the two are nearly the same then it doesn't matter which one is divided because they will be roughly the same, just differing by a floating point precision amount
+    ((x - y) / x).abs() <= f64::EPSILON
+}
+
+pub fn precise_equal(x: f64, y: f64) -> bool {
+    // Because there are situations where equality down to potentially millionths is necessary, this one uses mantissa digits to determine if they are roughly equal
+    // This won't come up most of the time for my use case, but just in case
+    (x - y).abs() <= f64::EPSILON
 }
 
 pub fn vector3_round(v: Vector3f64) -> Vector3f64 {

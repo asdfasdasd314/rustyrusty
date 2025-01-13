@@ -125,7 +125,6 @@ impl DynamicBody {
             let proj_plane = Plane::from(plane);
             let proj1 = proj_plane.project_mesh(self.get_mesh());
             let proj2 = proj_plane.project_mesh(other.get_mesh());
-
             let collision = collision_detection_2d(proj1, proj2, proj_plane.n);
             match collision {
                 Some(collision) => {
@@ -142,6 +141,11 @@ impl DynamicBody {
 
         align_direction_vec(&mut direction, self.get_mesh(), other.get_mesh());
 
+        
+        // Here's all I'm going to say...
+        // I have been debugging this floating point precision error for a week
+        // This works 93% of the time, so I'm just going to run with it
+        // 0.12
         return Some(direction * min_overlap);
     }
 }

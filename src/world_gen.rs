@@ -69,7 +69,11 @@ impl MeshShape for GroundMesh {
     
     fn get_polygons(&self) -> Vec<Polygon> {
         let vertices = self.get_vertices();
-        vec![Polygon::new(vertices)]
+
+        // Because it's not guaranteed that each 4 points will be coplanar, we create two traingles that contain all the points
+        let triangle1 = vec![vertices[0], vertices[1], vertices[2]];
+        let triangle2 = vec![vertices[2], vertices[3], vertices[0]];
+        vec![Polygon::new(triangle1), Polygon::new(triangle2)]
     }
 
     fn get_center(&self) -> Vector3f64 {

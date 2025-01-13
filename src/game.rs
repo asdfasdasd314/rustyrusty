@@ -91,6 +91,9 @@ impl Game {
                     println!("Exiting debug mode");
                 }
             }
+            if self.raylib_handle.is_key_pressed(KeyboardKey::KEY_T) {
+                self.player.move_by(Vector3f64::new(0.0, 10.0, 0.0));
+            }
 
             // Do user input and movement
             self.player.update(&self.raylib_handle, delta_time as f64);
