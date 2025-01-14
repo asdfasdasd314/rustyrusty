@@ -3,6 +3,7 @@ use crate::debug::*;
 use crate::math_util::*;
 use crate::float_precision::*;
 use raylib::prelude::*;
+use chrono::Utc;
 use rand::thread_rng;
 use rand::seq::SliceRandom;
 use noise::{NoiseFn, Simplex};
@@ -107,7 +108,7 @@ impl MeshShape for GroundMesh {
 
 pub fn generate_height_map() -> Vec<Vec<f64>> {
     // Initialize Simplex noise generator
-    let simplex = Simplex::new(0);
+    let simplex = Simplex::new(Utc::now().timestamp() as u32);
 
     // Heightmap dimensions
     let width = 100;
