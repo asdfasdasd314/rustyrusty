@@ -1,12 +1,12 @@
-use crate::render::*;
 use crate::debug::*;
-use crate::math_util::*;
 use crate::float_precision::*;
-use raylib::prelude::*;
+use crate::math_util::*;
+use crate::render::*;
 use chrono::Utc;
-use rand::thread_rng;
-use rand::seq::SliceRandom;
 use noise::{NoiseFn, Simplex};
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+use raylib::prelude::*;
 
 #[derive(Debug)]
 pub struct GroundMesh {
@@ -26,7 +26,15 @@ pub struct GroundMesh {
 }
 
 impl GroundMesh {
-    pub fn new(bottom_left_pos: Vector2f64, dx: f64, dz: f64, h1: f64, h2: f64, h3: f64, h4: f64) -> Self {
+    pub fn new(
+        bottom_left_pos: Vector2f64,
+        dx: f64,
+        dz: f64,
+        h1: f64,
+        h2: f64,
+        h3: f64,
+        h4: f64,
+    ) -> Self {
         let colors = vec![
             Color::GREEN,
             Color::BROWN,
@@ -40,10 +48,10 @@ impl GroundMesh {
         let mut rng = thread_rng();
 
         let random_color = colors.choose(&mut rng).unwrap();
- 
+
         Self {
             bottom_left_pos,
-            dx, 
+            dx,
             dz,
             h1,
             h2,
@@ -62,12 +70,24 @@ impl MeshShape for GroundMesh {
     fn get_vertices(&self) -> Vec<Vector3f64> {
         return vec![
             Vector3f64::new(self.bottom_left_pos.x, self.h1, self.bottom_left_pos.y),
-            Vector3f64::new(self.bottom_left_pos.x + self.dx, self.h2, self.bottom_left_pos.y),
-            Vector3f64::new(self.bottom_left_pos.x + self.dx, self.h3, self.bottom_left_pos.y + self.dz),
-            Vector3f64::new(self.bottom_left_pos.x, self.h4, self.bottom_left_pos.y + self.dz),
+            Vector3f64::new(
+                self.bottom_left_pos.x + self.dx,
+                self.h2,
+                self.bottom_left_pos.y,
+            ),
+            Vector3f64::new(
+                self.bottom_left_pos.x + self.dx,
+                self.h3,
+                self.bottom_left_pos.y + self.dz,
+            ),
+            Vector3f64::new(
+                self.bottom_left_pos.x,
+                self.h4,
+                self.bottom_left_pos.y + self.dz,
+            ),
         ];
     }
-    
+
     fn get_polygons(&self) -> Vec<Polygon> {
         let vertices = self.get_vertices();
 
@@ -94,10 +114,20 @@ impl MeshShape for GroundMesh {
 
     fn render(&self, draw_handle: &mut RaylibMode3D<'_, RaylibDrawHandle<'_>>, in_debug: bool) {
         let vertices = self.get_vertices();
-       
+
         for i in 1..vertices.len() - 1 {
-            draw_handle.draw_triangle3D(Vector3::from(vertices[0]), Vector3::from(vertices[i]), Vector3::from(vertices[i + 1]), self.color);
-            draw_handle.draw_triangle3D(Vector3::from(vertices[0]), Vector3::from(vertices[i + 1]), Vector3::from(vertices[i]), self.color);
+            draw_handle.draw_triangle3D(
+                Vector3::from(vertices[0]),
+                Vector3::from(vertices[i]),
+                Vector3::from(vertices[i + 1]),
+                self.color,
+            );
+            draw_handle.draw_triangle3D(
+                Vector3::from(vertices[0]),
+                Vector3::from(vertices[i + 1]),
+                Vector3::from(vertices[i]),
+                self.color,
+            );
         }
 
         if in_debug {
@@ -130,8 +160,14 @@ pub fn generate_height_map() -> Vec<Vec<f64>> {
 Creates a mesh from a height map, but because we use the separating axis theorem, the height map has to be guaranteed to be a convex shape
 So for each little grid of four points we have to create an individual mesh shape
  */
-pub fn create_mesh_from_height_map(height_map: Vec<Vec<f64>>, start_pos: Vector2f64, dx: f64, dz: f64) -> Vec<Box<dyn MeshShape>> {
-    let mut all_meshes: Vec<Box<dyn MeshShape>> = Vec::with_capacity((height_map.len() - 1) * (height_map[0].len() - 1));
+pub fn create_mesh_from_height_map(
+    height_map: Vec<Vec<f64>>,
+    start_pos: Vector2f64,
+    dx: f64,
+    dz: f64,
+) -> Vec<Box<dyn MeshShape>> {
+    let mut all_meshes: Vec<Box<dyn MeshShape>> =
+        Vec::with_capacity((height_map.len() - 1) * (height_map[0].len() - 1));
     for i in 0..height_map.len() - 1 {
         for j in 0..height_map[0].len() - 1 {
             let ground_mesh = GroundMesh::new(
@@ -143,9 +179,7 @@ pub fn create_mesh_from_height_map(height_map: Vec<Vec<f64>>, start_pos: Vector2
                 height_map[i + 1][j + 1],
                 height_map[i][j + 1],
             );
-            all_meshes.push(
-                Box::new(ground_mesh) as Box<dyn MeshShape>
-            );
+            all_meshes.push(Box::new(ground_mesh) as Box<dyn MeshShape>);
         }
     }
     return all_meshes;
