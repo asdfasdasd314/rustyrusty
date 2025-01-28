@@ -1,8 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc ee53c8733c253a703cac18871c59b946e9472fe1432b9091ac0eb3758c182fde # shrinks to thing = false
-cc 6b85aa3043ce26b6e6d80d215e25e135f1e3edd889f2772bbf37aa5636d7b73e # shrinks to point = Vector3 { x: 0.0, y: 0.0, z: 424.2785 }, plane = Plane { a: -114.28027, b: 790.3408, c: -645.7435, d: 1105935.0, p0: Vector3 { x: -376.59763, y: 968.69305, z: -460.39883 } }
