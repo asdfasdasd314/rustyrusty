@@ -1,7 +1,8 @@
+use crate::math::float_precision::*;
+use crate::physics::physics::{Dynamic, DynamicBody};
 use raylib::prelude::*;
-use crate::float_precision::*;
 
-use crate::physics::*;
+use super::physics::Physical;
 
 pub enum CameraType {
     FirstPerson,
@@ -98,7 +99,6 @@ impl Player {
             self.yaw.to_radians().sin() * self.pitch.to_radians().cos(),
         );
 
-
         match &self.camera_type {
             CameraType::FirstPerson => {
                 // Update camera target based on direction
@@ -106,7 +106,8 @@ impl Player {
             }
             CameraType::ThirdPerson(distance) => {
                 // Given the direcction, the camera should be on the opposite side of the sphere from the camera direction
-                let target_position = self.dynamic_body.get_center() + direction.normalized() * (-1.0 * distance);
+                let target_position =
+                    self.dynamic_body.get_center() + direction.normalized() * (-1.0 * distance);
                 self.camera.position = self.camera.position.lerp(target_position.into(), 1.0); // Adjust the factor (0.1) for smoothness
                 self.camera.target = self.dynamic_body.get_center().into();
             }

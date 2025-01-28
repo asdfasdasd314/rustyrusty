@@ -1,7 +1,7 @@
-use crate::physics::*;
+use crate::math::float_precision::*;
+use crate::physics::physics::{Dynamic, DynamicBody, Physical, StaticBody};
 use crate::player::*;
-use crate::world_gen::*;
-use crate::float_precision::*;
+use crate::world::world_gen::*;
 use raylib::prelude::*;
 
 // These usizes are the indices in the dynamic and static object vecs in Game struct
@@ -86,8 +86,7 @@ impl Game {
                 self.in_debug_mode = !self.in_debug_mode;
                 if self.in_debug_mode {
                     println!("Switching to debug mode");
-                }
-                else {
+                } else {
                     println!("Exiting debug mode");
                 }
             }
@@ -102,10 +101,6 @@ impl Game {
                 self.find_colliding_objects();
             if collisions.len() > 0 {
                 self.simulate_collisions(collisions);
-                println!("Colliding");
-            }
-            else {
-                println!("Not colliding");
             }
 
             // Begin rendering
@@ -128,7 +123,10 @@ impl Game {
                 match self.player.camera_type {
                     CameraType::FirstPerson => {}
                     CameraType::ThirdPerson(_) => {
-                        self.player.dynamic_body.mesh.render(&mut draw_handle_3d, self.in_debug_mode);
+                        self.player
+                            .dynamic_body
+                            .mesh
+                            .render(&mut draw_handle_3d, self.in_debug_mode);
                     }
                 }
             }
@@ -136,7 +134,16 @@ impl Game {
             draw_handle.draw_fps(10, 10);
 
             let player_center = self.player.dynamic_body.get_center();
-            draw_handle.draw_text(&format!("{} {} {}", player_center.x, player_center.y, player_center.z), 10, 40, 20, Color::BLACK);
+            draw_handle.draw_text(
+                &format!(
+                    "{} {} {}",
+                    player_center.x, player_center.y, player_center.z
+                ),
+                10,
+                40,
+                20,
+                Color::BLACK,
+            );
         }
     }
 
@@ -154,10 +161,14 @@ impl Game {
     Third entry is the mtv which is applied to the first object to fix intersections between objects
      */
     fn find_colliding_objects(&self) -> Vec<(CollisionObject1, CollisionObject2, Vector3f64)> {
-        fn calculate_mtv(dyn_obj: &DynamicBody, other_obj: Box<&dyn Physical>) -> Option<Vector3f64> {
+        fn calculate_mtv(
+            dyn_obj: &DynamicBody,
+            other_obj: Box<&dyn Physical>,
+        ) -> Option<Vector3f64> {
             let dyn_obj_radius = f64_round(dyn_obj.get_bounding_circle_radius());
             let other_obj_radius = f64_round(other_obj.get_bounding_circle_radius());
-            let distance_between_centers = f64_round((dyn_obj.get_center() - other_obj.get_center()).length());
+            let distance_between_centers =
+                f64_round((dyn_obj.get_center() - other_obj.get_center()).length());
             if dyn_obj_radius + other_obj_radius < distance_between_centers {
                 return None;
             }
@@ -241,7 +252,8 @@ impl Game {
 
     fn generate_world(&mut self) {
         let height_map = generate_height_map();
-        let world_mesh = create_mesh_from_height_map(height_map, Vector2f64::new(0.0, 0.0), 4.0, 4.0);
+        let world_mesh =
+            create_mesh_from_height_map(height_map, Vector2f64::new(0.0, 0.0), 4.0, 4.0);
 
         // Add the mesh to the world so it will be rendered
         for mesh in world_mesh {

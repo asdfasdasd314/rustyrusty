@@ -1,7 +1,7 @@
-use crate::debug::*;
-use crate::float_precision::*;
-use crate::math_util::*;
-use crate::render::*;
+use crate::math::float_precision::*;
+use crate::math::math::*;
+use crate::simulation::debug::*;
+use crate::simulation::render::*;
 use chrono::Utc;
 use noise::{NoiseFn, Simplex};
 use rand::seq::SliceRandom;

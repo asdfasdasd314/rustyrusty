@@ -1,6 +1,6 @@
-use crate::math_util::*;
-use crate::debug::*;
-use crate::float_precision::*;
+use crate::math::float_precision::*;
+use crate::math::math::*;
+use crate::simulation::debug::*;
 use raylib::prelude::*;
 use std::fmt::Debug;
 
@@ -18,18 +18,15 @@ impl SATAble2D for LineSegment3D {
     }
 
     fn get_vertices(&self) -> Vec<Vector3f64> {
-        vec![self.point1, self.point2] 
+        vec![self.point1, self.point2]
     }
 }
 
 impl LineSegment3D {
     pub fn new(point1: Vector3f64, point2: Vector3f64) -> Self {
-        Self {
-            point1,
-            point2,
-        }
+        Self { point1, point2 }
     }
-    
+
     pub fn length(&self) -> f64 {
         (self.point2 - self.point1).length()
     }
@@ -40,10 +37,7 @@ impl LineSegment3D {
 
     Requires the input be rounded
      */
-    pub fn calculate_overlap(
-        &self,
-        other: &LineSegment3D,
-    ) -> Option<f64> {
+    pub fn calculate_overlap(&self, other: &LineSegment3D) -> Option<f64> {
         let base_line = Line3D::from_line_segment(self);
 
         // I don't think this is right?
@@ -54,14 +48,11 @@ impl LineSegment3D {
         }
         if t1 < 0.0 || t1 > 1.0 {
             return Some(f64_min(&[1.0 - t2, t2]) * base_line.v.length());
-        }
-        else if t2 < 0.0 || t2 > 1.0 {
+        } else if t2 < 0.0 || t2 > 1.0 {
             return Some(f64_min(&[1.0 - t1, t1]) * base_line.v.length());
-        }
-        else if t1 < t2 {
+        } else if t1 < t2 {
             return Some(f64_min(&[t2, 1.0 - t1]) * base_line.v.length());
-        }
-        else {
+        } else {
             return Some(f64_min(&[t1, 1.0 - t2]) * base_line.v.length());
         }
     }
@@ -72,23 +63,32 @@ pub trait SATAble2D: Debug {
     fn get_vertices(&self) -> Vec<Vector3f64>;
 }
 
-pub fn collision_detection_2d(obj1: Box<dyn SATAble2D>, obj2: Box<dyn SATAble2D>, coplanar_normal: Vector3f64) -> Option<(f64, Vector3f64)> {
+pub fn collision_detection_2d(
+    obj1: Box<dyn SATAble2D>,
+    obj2: Box<dyn SATAble2D>,
+    coplanar_normal: Vector3f64,
+) -> Option<(f64, Vector3f64)> {
     let obj1_axes = obj1.compute_orthogonal_axes(&coplanar_normal);
     let obj2_axes = obj2.compute_orthogonal_axes(&coplanar_normal);
     let projection_axes: Vec<Line3D> = [obj1_axes.as_slice(), obj2_axes.as_slice()].concat();
-    
-    let mut res: (f64, Vector3f64) = (f64::MAX, Vector3f64::new(0.0, 0.0, 0.0,));
+
+    let mut res: (f64, Vector3f64) = (f64::MAX, Vector3f64::new(0.0, 0.0, 0.0));
     for axis in projection_axes {
         let line_segment1: LineSegment3D = axis.project_satable_object(&obj1);
         let line_segment2: LineSegment3D = axis.project_satable_object(&obj2);
 
-        let rounded_segment1 = LineSegment3D::new(vector3_round(line_segment1.point1), vector3_round(line_segment1.point2));
-        let rounded_segment2 = LineSegment3D::new(vector3_round(line_segment2.point1), vector3_round(line_segment2.point2));
+        let rounded_segment1 = LineSegment3D::new(
+            vector3_round(line_segment1.point1),
+            vector3_round(line_segment1.point2),
+        );
+        let rounded_segment2 = LineSegment3D::new(
+            vector3_round(line_segment2.point1),
+            vector3_round(line_segment2.point2),
+        );
         let overlap: Option<f64>;
         if rounded_segment1.length() > rounded_segment2.length() {
             overlap = rounded_segment1.calculate_overlap(&rounded_segment2);
-        }
-        else {
+        } else {
             overlap = rounded_segment2.calculate_overlap(&rounded_segment1);
         }
         match overlap {
@@ -117,13 +117,19 @@ pub struct Polygon {
 impl SATAble2D for Polygon {
     fn compute_orthogonal_axes(&self, coplanar_normal: &Vector3f64) -> Vec<Line3D> {
         let edges = self.get_edges();
-        edges.iter().map(|edge| {
-            Line3D::from_point_and_parallel_vec(edge.point1, coplanar_normal.cross(edge.point2 - edge.point1))
-        }).collect()
+        edges
+            .iter()
+            .map(|edge| {
+                Line3D::from_point_and_parallel_vec(
+                    edge.point1,
+                    coplanar_normal.cross(edge.point2 - edge.point1),
+                )
+            })
+            .collect()
     }
 
     fn get_vertices(&self) -> Vec<Vector3f64> {
-        self.points.clone()       
+        self.points.clone()
     }
 }
 
@@ -138,7 +144,10 @@ impl Polygon {
     pub fn get_edges(&self) -> Vec<LineSegment3D> {
         let mut edges: Vec<LineSegment3D> = Vec::with_capacity(self.points.len());
         for i in 0..self.points.len() {
-            edges.push(LineSegment3D::new(self.points[i], self.points[(i + 1) % self.points.len()]));
+            edges.push(LineSegment3D::new(
+                self.points[i],
+                self.points[(i + 1) % self.points.len()],
+            ));
         }
         edges
     }
@@ -197,17 +206,14 @@ impl Polygon {
     Returns `None` if the shapes don't overlap
     Otherwise returns the minimum overlap between shapes and the axis on which that minimum overlap was found
     */
-    fn separating_axis_theorem(
-        &self,
-        other_obj: &Polygon,
-    ) -> Option<(f64, Vector3f64)> {
+    fn separating_axis_theorem(&self, other_obj: &Polygon) -> Option<(f64, Vector3f64)> {
         let plane = self.convert_to_plane();
         let mut overlap = f64::MAX;
         let mut axis: Option<Vector3f64> = None;
         for i in 0..self.points.len() {
             let line_segment = &self.get_edges()[i];
             let u = line_segment.point2 - line_segment.point1;
-            if u == Vector3f64::new(0.0, 0.0, 0.0,) {
+            if u == Vector3f64::new(0.0, 0.0, 0.0) {
                 continue;
             }
             let normal = u.cross(plane.n);
@@ -215,16 +221,21 @@ impl Polygon {
             let line_segment1 = projection_line.project_polygon(self);
             let line_segment2 = projection_line.project_polygon(other_obj);
 
-            let rounded_segment1 = LineSegment3D::new(vector3_round(line_segment1.point1), vector3_round(line_segment1.point2));
-            let rounded_segment2 = LineSegment3D::new(vector3_round(line_segment2.point1), vector3_round(line_segment2.point2));
+            let rounded_segment1 = LineSegment3D::new(
+                vector3_round(line_segment1.point1),
+                vector3_round(line_segment1.point2),
+            );
+            let rounded_segment2 = LineSegment3D::new(
+                vector3_round(line_segment2.point1),
+                vector3_round(line_segment2.point2),
+            );
             let o = rounded_segment1.calculate_overlap(&rounded_segment2);
             match o {
                 Some(o) => {
                     if axis.is_none() {
                         overlap = o;
                         axis = Some(projection_line.v);
-                    }
-                    else if o < overlap {
+                    } else if o < overlap {
                         overlap = o;
                         axis = Some(projection_line.v);
                     }
@@ -283,7 +294,8 @@ pub struct RectangularPrism {
 impl RectangularPrism {
     pub fn new(root: Vector3f64, length: f64, width: f64, height: f64) -> Self {
         // Calculate the furthest point
-        let bounding_circle_radius = Vector3f64::new(width / 2.0, height / 2.0, length / 2.0).length();
+        let bounding_circle_radius =
+            Vector3f64::new(width / 2.0, height / 2.0, length / 2.0).length();
         RectangularPrism {
             root,
             length,
@@ -358,9 +370,7 @@ impl MeshShape for RectangularPrism {
         let polygons = self.get_polygons();
 
         let mut color_index = 0;
-        let colors = vec![
-            Color::RED,
-        ];
+        let colors = vec![Color::RED];
         for polygon in &polygons {
             let polygon_points = &polygon.points;
 

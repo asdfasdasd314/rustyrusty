@@ -1,7 +1,7 @@
-use crate::hashable::*;
-use crate::math_util::{Line3D, Plane};
-use crate::render::*;
-use crate::float_precision::*;
+use crate::datastructures::hashable::*;
+use crate::math::float_precision::*;
+use crate::math::math::Plane;
+use crate::simulation::render::*;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
@@ -133,7 +133,7 @@ impl DynamicBody {
                         direction = collision.1;
                     }
                 }
-                None=> {
+                None => {
                     return None;
                 }
             }
@@ -141,7 +141,6 @@ impl DynamicBody {
 
         align_direction_vec(&mut direction, self.get_mesh(), other.get_mesh());
 
-        
         // Here's all I'm going to say...
         // I have been debugging this floating point precision error for a week
         // This works 93% of the time, so I'm just going to run with it

@@ -1,7 +1,7 @@
-use crate::math_util::*;
-use crate::float_precision::*;
-use std::hash::{Hash, Hasher};
+use crate::math::float_precision::*;
+use crate::math::math::*;
 use ordered_float::OrderedFloat;
+use std::hash::{Hash, Hasher};
 
 #[derive(Eq, PartialEq)]
 pub struct HashablePlane {
@@ -25,11 +25,7 @@ pub struct HashableVector2 {
 
 impl HashablePlane {
     pub fn new(p0: HashableVector3, n: HashableVector3, d: OrderedFloat<f64>) -> Self {
-        Self {
-            p0,
-            n,
-            d,
-        }
+        Self { p0, n, d }
     }
 }
 

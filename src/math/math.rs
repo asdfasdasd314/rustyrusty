@@ -1,6 +1,6 @@
-use crate::float_precision::*;
-use crate::heap::custom_heap::*;
-use crate::render::*;
+use crate::datastructures::heap::custom_heap::*;
+use crate::math::float_precision::*;
+use crate::simulation::render::*;
 
 pub fn f64_min(nums: &[f64]) -> f64 {
     let mut min = nums[0];
@@ -103,7 +103,7 @@ impl Plane {
         if precise_equal(d_vec.length(), 0.0) {
             return *point;
         }
-        
+
         let proj = self.n * d_vec.dot(self.n) / (self.n.dot(self.n));
 
         return *point - proj;
@@ -114,9 +114,7 @@ impl Plane {
         let projected_points: Vec<Vector3f64> = mesh
             .get_vertices()
             .iter()
-            .map(|point| {
-                self.project_point(point)
-            })
+            .map(|point| self.project_point(point))
             .collect();
 
         // Convert the points to 2D
@@ -564,48 +562,4 @@ impl TwoDimensionalPointProjector {
             .map(|(_, index)| original_points[*index])
             .collect()
     }
-}
-
-// Calculates the difference in between the angles of the vectors using the base_vec as the base
-// **in degrees**
-pub fn calculate_difference_in_angle(
-    base_vec: &Vector3f64,
-    compare_to_vec: &Vector3f64,
-) -> SphericalAngle {
-    // To make things easier, we'll transform these vectors so that base_vec is on the z-axis
-    // We can do this by calculating the angle the base_vec makes with the origin
-    // We know x, y, and z, so we can use conversions between ro, theta, and phi to find these changes in angle
-    let base_vec_magnitude = base_vec.length();
-    let compare_to_vec_magnitude = compare_to_vec.length();
-
-    let base_vec_theta = (base_vec.y / (base_vec.x.powi(2) + base_vec.y.powi(2)).sqrt()).asin();
-    let base_vec_phi = base_vec.z / base_vec_magnitude;
-
-    let compare_to_vec_theta =
-        (compare_to_vec.y / (compare_to_vec.x.powi(2) + compare_to_vec.y.powi(2)).sqrt()).asin();
-    let compare_to_vec_phi = compare_to_vec.z / compare_to_vec_magnitude;
-
-    return SphericalAngle {
-        theta: compare_to_vec_theta - base_vec_theta,
-        phi: compare_to_vec_phi - base_vec_phi,
-    };
-}
-
-// This function checks that given some angles, they surround the relative origin they were calculated from
-pub fn check_angles_surround_relative_origin(angles: Vec<SphericalAngle>) -> bool {
-    // TODO For now, brute force
-    for i in 0..(angles.len() - 1) {
-        for j in (i + 1)..angles.len() {
-            // We want to check if the sign flips across the pair in both the theta and phi
-            let angle1 = &angles[i];
-            let angle2 = &angles[j];
-
-            // Sign should be flipped, so check for that (the product should be less than 0)
-            if angle1.theta * angle2.theta <= 0.0 && angle1.phi * angle2.phi <= 0.0 {
-                return true;
-            }
-        }
-    }
-
-    return false;
 }

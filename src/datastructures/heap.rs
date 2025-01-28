@@ -1,7 +1,6 @@
-use crate::math_util::*;
-use crate::float_precision::*;
-use crate::hashable::*;
-use raylib::prelude::*;
+use crate::datastructures::hashable::*;
+use crate::math::float_precision::*;
+use crate::math::math::*;
 use std::collections::HashSet;
 
 type Data = (Vector2f64, usize);
@@ -13,7 +12,11 @@ and false if the second point should come before the first point
 I understand this is what the key would be if I just used sort_by(), but I think there's optimizations I could do with a heap in the future
 and I just wanted to implement a heap because it's cool, and now I have a much better understanding of them
  */
-fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Data, point2: &Data) -> bool {
+fn compare_order_of_two_points(
+    comparison_axis: &ComparisonAxis,
+    point1: &Data,
+    point2: &Data,
+) -> bool {
     let root_vec = comparison_axis.p1 - comparison_axis.p0;
 
     let vec1 = point1.0 - comparison_axis.p1;
@@ -29,7 +32,7 @@ fn compare_order_of_two_points(comparison_axis: &ComparisonAxis, point1: &Data, 
 
         return distance1 < distance2;
     }
-    
+
     return cos_angle1 > cos_angle2;
 }
 
@@ -73,11 +76,7 @@ pub mod custom_heap {
     `actual_root` is the root point of the polygon
     `helper_node` is another point that defines the line for which all points will compare their angle with it to, this should be one -1 units from the actual root in the x direction
      */
-    fn sift_up(
-        comparison_axis: &ComparisonAxis,
-        mut index: usize,
-        heap: &mut Vec<Data>,
-    ) {
+    fn sift_up(comparison_axis: &ComparisonAxis, mut index: usize, heap: &mut Vec<Data>) {
         while index > 0 {
             let point = heap[index];
             let parent_index = get_parent_index(index).expect("This should not panic because we already checked that the index isn't the minimum index");
@@ -101,24 +100,28 @@ pub mod custom_heap {
     `actual_root` is the root point of the polygon
     `helper_node` is another point that defines the line for which all points will compare their angle with it to
      */
-    fn sift_down(
-        comparison_axis: &ComparisonAxis,
-        mut index: usize,
-        heap: &mut Vec<Data>,
-    ) {
+    fn sift_down(comparison_axis: &ComparisonAxis, mut index: usize, heap: &mut Vec<Data>) {
         while index < heap.len() {
             let left_index = get_left_child_index(heap, index);
             let max_index = match left_index {
                 Some(left_index) => {
                     let mut swap = index;
-                    if !compare_order_of_two_points(comparison_axis, &heap[index], &heap[left_index]) {
+                    if !compare_order_of_two_points(
+                        comparison_axis,
+                        &heap[index],
+                        &heap[left_index],
+                    ) {
                         swap = left_index
                     }
 
                     let right_index = get_right_child_index(heap, index);
                     match right_index {
                         Some(right_index) => {
-                            if !compare_order_of_two_points(comparison_axis, &heap[swap], &heap[right_index]) {
+                            if !compare_order_of_two_points(
+                                comparison_axis,
+                                &heap[swap],
+                                &heap[right_index],
+                            ) {
                                 swap = right_index;
                             }
                         }
@@ -149,10 +152,7 @@ pub mod custom_heap {
     `comparison_root` is the root point of the polygon
     `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
      */
-    pub fn heapify(
-        comparison_axis: &ComparisonAxis,
-        array: &mut Vec<Data>,
-    ) {
+    pub fn heapify(comparison_axis: &ComparisonAxis, array: &mut Vec<Data>) {
         for i in (0..=array.len() / 2).rev() {
             // There is an issue with how the root is compared with other points,
             // and how the root might not be the bottom left point sometimes, should the root be the bottom leftmost point even if it doesn't contain the polygon?
@@ -165,11 +165,7 @@ pub mod custom_heap {
     `comparison_root` is the root point of the polygon
     `comparison_helper` is another point that defines the line for which all points will compare their angle with it to
      */
-    pub fn heap_push(
-        comparison_axis: &ComparisonAxis,
-        new_element: Data,
-        heap: &mut Vec<Data>,
-    ) {
+    pub fn heap_push(comparison_axis: &ComparisonAxis, new_element: Data, heap: &mut Vec<Data>) {
         // Push the element
         heap.push(new_element);
 
@@ -182,10 +178,7 @@ pub mod custom_heap {
     `actual_root` is the root point of the polygon
     `helper_point` is another point that defines the line for which all points will compare their angle with it to
      */
-    pub fn heap_pop(
-        comparison_axis: &ComparisonAxis,
-        heap: &mut Vec<Data>,
-    ) -> Option<Data> {
+    pub fn heap_pop(comparison_axis: &ComparisonAxis, heap: &mut Vec<Data>) -> Option<Data> {
         if heap.len() == 0 {
             return None;
         }
@@ -206,10 +199,7 @@ pub mod custom_heap {
     `actual_root` is the root point of the polygon
     `comparison_point` is another point that defines the line for which all points will compare their angle with it to
      */
-    pub fn heapsort(
-        comparison_axis: &ComparisonAxis,
-        array: &mut Vec<Data>,
-    ) {
+    pub fn heapsort(comparison_axis: &ComparisonAxis, array: &mut Vec<Data>) {
         heapify(comparison_axis, array);
         // We use Vec::new() and not Vec::with_capacity() because technically this will be O(1) space
         let mut used_points: HashSet<HashableVector2> = HashSet::new();
@@ -242,11 +232,8 @@ pub fn is_sorted(comparison_axis: &ComparisonAxis, values: &[Data]) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use raylib::prelude::*;
-    use super::*;
     use super::custom_heap::*;
-
-    
+    use super::*;
 
     #[test]
     fn test_heapsort() {
@@ -264,7 +251,11 @@ mod tests {
             Vector2f64::new(-0.5, 1.0),
         ];
 
-        let mut input: Vec<(Vector2f64, usize)> = points.iter().enumerate().map(|(index, point)| (*point, index)).collect();
+        let mut input: Vec<(Vector2f64, usize)> = points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| (*point, index))
+            .collect();
 
         let mut comparison_axis = ComparisonAxis::new(&input);
         heapsort(&comparison_axis, &mut input);
@@ -276,12 +267,16 @@ mod tests {
             Vector2f64::new(1.0134430934824675e-7, -4.7416475008521627e-5),
             Vector2f64::new(1.0134430934824675e-7, 0.9999525835249915),
         ];
-        
-        input = points.iter().enumerate().map(|(index, point)| (*point, index)).collect();
+
+        input = points
+            .iter()
+            .enumerate()
+            .map(|(index, point)| (*point, index))
+            .collect();
 
         comparison_axis = ComparisonAxis::new(&input);
         heapsort(&comparison_axis, &mut input);
-   
+
         assert!(is_sorted(&comparison_axis, &input));
     }
 }
